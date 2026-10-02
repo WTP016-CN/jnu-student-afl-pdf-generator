@@ -66,8 +66,7 @@ function readForm() {
   const category = form.querySelector('input[name="category"]:checked');
   if (!category) fail($('studentId'), '请选择学生类别（内招生 / 外招生）');
 
-  const college = $('college').value.trim();
-  if (!college) fail($('college'), '请填写学院');
+  const college = readCollege();
 
   const major = $('major').value.trim();
   if (!major) fail($('major'), '请填写专业');
@@ -104,6 +103,25 @@ function readForm() {
     reasonType: reasonType.value,
     fillAttachment: $('fillAttachment').checked,
   };
+}
+
+/* ------------------------------------------------------------------ 学院选择 */
+
+const COLLEGE_OTHER = '__other__';
+
+function readCollege() {
+  if ($('college').value === COLLEGE_OTHER) {
+    const other = $('collegeOther').value.trim();
+    if (!other) fail($('collegeOther'), '请填写学院全称');
+    return other;
+  }
+  if (!$('college').value) fail($('college'), '请选择学院');
+  return $('college').value;
+}
+
+/** 选了“其他”才显示手动填写的输入框 */
+function updateCollegeUi() {
+  $('collegeOtherField').hidden = $('college').value !== COLLEGE_OTHER;
 }
 
 /* --------------------------------------------------------- 电邮（学子邮 / 自备） */
@@ -221,6 +239,7 @@ form.addEventListener('submit', async (event) => {
 $('startDate').addEventListener('change', updateDays);
 $('endDate').addEventListener('change', updateDays);
 $('studentId').addEventListener('input', updateEmailUi);
+$('college').addEventListener('change', updateCollegeUi);
 form.querySelectorAll('input[name="emailMode"]').forEach((el) => {
   el.addEventListener('change', updateEmailUi);
 });
@@ -234,3 +253,4 @@ loadAssets()
   .catch(() => setStatus('资源加载失败，请确认通过 http(s) 访问本页面。', 'error'));
 updateDays();
 updateEmailUi();
+updateCollegeUi();

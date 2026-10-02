@@ -78,6 +78,7 @@ input[type="tel"],
 input[type="email"],
 input[type="date"],
 input:not([type]),
+select,
 textarea {
   width: 100%;
   padding: 10px 12px;
