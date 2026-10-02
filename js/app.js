@@ -107,21 +107,30 @@ function readForm() {
 
 /* ------------------------------------------------------------------ 学院选择 */
 
-const COLLEGE_OTHER = '__other__';
+const COLLEGE_OTHER = '其他（手动填写）';
+
+/** 学院名单就在页面上的 <datalist> 里，这里直接读，避免两处维护 */
+function collegeNames() {
+  return [...$('collegeList').options].map((option) => option.value);
+}
 
 function readCollege() {
-  if ($('college').value === COLLEGE_OTHER) {
+  const value = $('college').value.trim();
+  if (value === COLLEGE_OTHER) {
     const other = $('collegeOther').value.trim();
     if (!other) fail($('collegeOther'), '请填写学院全称');
     return other;
   }
-  if (!$('college').value) fail($('college'), '请选择学院');
-  return $('college').value;
+  if (!value) fail($('college'), '请选择学院');
+  if (!collegeNames().includes(value)) {
+    fail($('college'), '请从列表中选择学院，或选“其他（手动填写）”后手填全称');
+  }
+  return value;
 }
 
 /** 选了“其他”才显示手动填写的输入框 */
 function updateCollegeUi() {
-  $('collegeOtherField').hidden = $('college').value !== COLLEGE_OTHER;
+  $('collegeOtherField').hidden = $('college').value.trim() !== COLLEGE_OTHER;
 }
 
 /* --------------------------------------------------------- 电邮（学子邮 / 自备） */
@@ -239,7 +248,7 @@ form.addEventListener('submit', async (event) => {
 $('startDate').addEventListener('change', updateDays);
 $('endDate').addEventListener('change', updateDays);
 $('studentId').addEventListener('input', updateEmailUi);
-$('college').addEventListener('change', updateCollegeUi);
+$('college').addEventListener('input', updateCollegeUi);
 form.querySelectorAll('input[name="emailMode"]').forEach((el) => {
   el.addEventListener('change', updateEmailUi);
 });
