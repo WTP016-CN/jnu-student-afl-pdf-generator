@@ -1,24 +1,35 @@
 # -*- coding: utf-8 -*-
-"""从系统字体生成网页所需的两份裁剪字体。
+"""生成网页所需的两份裁剪字体（都使用开源字体）。
 
 用法（在项目根目录执行）：
     python tools/prepare-fonts.py
 
-产物：
-    assets/fonts/simsun-subset.ttf   宋体，保留 GB2312 全部字符 + 常用补充符号
-    assets/fonts/times-subset.ttf    Times New Roman，保留拉丁字母/数字/常用标点
+字体来源（首次运行会自动下载到 build/fonts-src/，也可以自己放好文件跳过下载）：
 
-说明：宋体与 Times New Roman 是随 Windows 分发的商业字体，此脚本只在本机
-从 C:\\Windows\\Fonts 读取并裁剪，裁剪结果仅供本工具生成请假条使用。
+    中文：Noto Serif SC（思源宋体，SIL OFL 1.1）
+          google/fonts/ofl/notoserifsc/NotoSerifSC[wght].ttf（可变字体，取 wght=400）
+    西文：Tinos（SIL OFL 1.1，与 Times New Roman 度量兼容）
+          google/fonts/ofl/tinos/Tinos-Regular.ttf
+
+产物：
+    assets/fonts/noto-serif-sc-subset.ttf   中文，保留 GB2312 全部字符 + 常用补充符号
+    assets/fonts/tinos-subset.ttf           西文，保留拉丁字母/数字/常用标点
 """
 import os
 import subprocess
 import sys
+import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(ROOT, "build")
+SRC = os.path.join(BUILD, "fonts-src")
 OUT = os.path.join(ROOT, "assets", "fonts")
-WINDIR = os.environ.get("WINDIR", r"C:\Windows")
+
+GF = "https://github.com/google/fonts/raw/main/"
+DOWNLOADS = {
+    "NotoSerifSC-var.ttf": GF + "ofl/notoserifsc/NotoSerifSC%5Bwght%5D.ttf",
+    "Tinos-Regular.ttf": GF + "ofl/tinos/Tinos-Regular.ttf",
+}
 
 
 def gb2312_codepoints():
@@ -37,11 +48,21 @@ def gb2312_codepoints():
 EXTRA = "√✓×✗□■○●△▲☆★※°′″℃№→←↑↓↔§¶·—–…‰"
 ASCII = set(range(0x20, 0x7F))
 
-SIMSUN_CPS = sorted(gb2312_codepoints() | ASCII | {ord(c) for c in EXTRA})
-TIMES_CPS = sorted(ASCII | set(range(0xA0, 0x100)) | {ord(c) for c in "‘’“”–—…‰°′″×÷√§¶†‡€£¥©®™"})
+CJK_CPS = sorted(gb2312_codepoints() | ASCII | {ord(c) for c in EXTRA})
+LATIN_CPS = sorted(ASCII | set(range(0xA0, 0x100))
+                   | {ord(c) for c in "‘’“”–—…‰°′″×÷√§¶†‡€£¥©®™"})
 
 # 丢弃嵌入点阵(EBDT/EBLC)、竖排度量、数字签名等用不到的表，明显减小体积
 DROP_TABLES = "EBDT,EBLC,EBSC,MERG,meta,vmtx,vhea,DSIG"
+
+
+def retrieve(name, url):
+    path = os.path.join(SRC, name)
+    if not os.path.exists(path):
+        os.makedirs(SRC, exist_ok=True)
+        print("下载 %s ..." % name)
+        urllib.request.urlretrieve(url, path)
+    return path
 
 
 def run(cmd):
@@ -49,11 +70,21 @@ def run(cmd):
     subprocess.run(cmd, check=True)
 
 
-def ttc_to_ttf(ttc_path, out_path, font_number=0):
-    from fontTools.ttLib import TTCollection
+def static_instance(src, wght=400):
+    """把可变字体实例化为静态字体（Noto Serif SC 默认轴值是 ExtraLight）。"""
+    from fontTools.ttLib import TTFont
+    from fontTools.varLib import instancer
 
-    coll = TTCollection(ttc_path)
-    coll.fonts[font_number].save(out_path)
+    name = os.path.splitext(os.path.basename(src))[0] + "-wght%d.ttf" % wght
+    dst = os.path.join(SRC, name)
+    if not os.path.exists(dst):
+        print("实例化 wght=%d ..." % wght)
+        font = TTFont(src)
+        # updateFontNames：把字体名里的 ExtraLight 改成 Regular，
+        # 否则生成的 PDF 里内嵌字体名会标着 ExtraLight，容易引起误解
+        instancer.instantiateVariableFont(font, {"wght": wght}, inplace=True, updateFontNames=True)
+        font.save(dst)
+    return dst
 
 
 def subset(src, dst, codepoints, label):
@@ -76,14 +107,13 @@ def main():
     os.makedirs(BUILD, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
 
-    simsun_ttf = os.path.join(BUILD, "simsun-full.ttf")
-    if not os.path.exists(simsun_ttf):
-        print("从 simsun.ttc 提取宋体 ...")
-        ttc_to_ttf(os.path.join(WINDIR, "Fonts", "simsun.ttc"), simsun_ttf)
+    for name, url in DOWNLOADS.items():
+        retrieve(name, url)
 
-    subset(simsun_ttf, os.path.join(OUT, "simsun-subset.ttf"), SIMSUN_CPS, "SimSun")
-    subset(os.path.join(WINDIR, "Fonts", "times.ttf"),
-           os.path.join(OUT, "times-subset.ttf"), TIMES_CPS, "Times New Roman")
+    cjk_src = static_instance(os.path.join(SRC, "NotoSerifSC-var.ttf"))
+    subset(cjk_src, os.path.join(OUT, "noto-serif-sc-subset.ttf"), CJK_CPS, "Noto Serif SC")
+    subset(os.path.join(SRC, "Tinos-Regular.ttf"),
+           os.path.join(OUT, "tinos-subset.ttf"), LATIN_CPS, "Tinos")
 
 
 if __name__ == "__main__":

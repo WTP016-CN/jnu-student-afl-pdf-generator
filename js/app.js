@@ -11,8 +11,8 @@ const submitBtn = $('submitBtn');
 // 模板以 base64 内嵌在 js/template-data.js 里，不走网络请求：
 // 有些浏览器安全软件会按内容识别 PDF 并掐断响应，fetch 会失败。
 const ASSETS = {
-  cjkFontBytes: 'assets/fonts/simsun-subset.ttf',
-  latinFontBytes: 'assets/fonts/times-subset.ttf',
+  cjkFontBytes: 'assets/fonts/noto-serif-sc-subset.ttf',
+  latinFontBytes: 'assets/fonts/tinos-subset.ttf',
 };
 
 function decodeBase64(base64) {
@@ -116,13 +116,13 @@ function daysBetween(start, end) {
   return Math.round((endUTC - startUTC) / 86400000) + 1;
 }
 
-/** 找出宋体裁剪字体里没有的字符，避免生成出缺字的 PDF */
+/** 找出中文字体里没有的字符，避免生成出缺字的 PDF */
 function unsupportedChars(text) {
   if (!cjkCharset) return [];
   const missing = new Set();
   for (const ch of text) {
     const cp = ch.codePointAt(0);
-    if (cp < 0x80 || ch.trim() === '') continue; // ASCII 走 Times New Roman
+    if (cp < 0x80 || ch.trim() === '') continue; // ASCII 走西文字体
     if (!cjkCharset.has(cp)) missing.add(ch);
   }
   return [...missing];

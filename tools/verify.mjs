@@ -25,8 +25,8 @@ const data = {
 
 const assets = {
   templateBytes: await read('assets/template.pdf'),
-  latinFontBytes: await read('assets/fonts/times-subset.ttf'),
-  cjkFontBytes: await read('assets/fonts/simsun-subset.ttf'),
+  latinFontBytes: await read('assets/fonts/tinos-subset.ttf'),
+  cjkFontBytes: await read('assets/fonts/noto-serif-sc-subset.ttf'),
 };
 
 // 缺字回归用例：尽量多地用到不同汉字，配合 tools/check-output.py 检查字形有没有丢

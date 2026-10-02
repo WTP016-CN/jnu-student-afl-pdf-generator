@@ -1,9 +1,9 @@
 /**
  * 把学生填写的信息绘制到请假申请表模板上。
  *
- * 字体规则（对应需求 3）：
- *   - 英文（数字、字母、半角符号）→ Times New Roman
- *   - 中文（汉字、中文标点、全角符号）→ 宋体
+ * 字体规则（对应需求 3，字体用开源的等价替代）：
+ *   - 英文（数字、字母、半角符号）→ Tinos（与 Times New Roman 度量兼容）
+ *   - 中文（汉字、中文标点、全角符号）→ Noto Serif SC（思源宋体）
  *   - 默认字号 10.5pt；某一行写不下时自动缩小，最小 7pt
  */
 import { PDFDocument, rgb } from '../vendor/pdf-lib.esm.min.js';
@@ -15,12 +15,12 @@ const MIN_FONT_SIZE = 7;
 // 文字与横线起点留一点间距，避免紧贴前面的标签
 const SLOT_PAD = 1.5;
 
-// Times New Roman 数字高度（capHeight 662/1000 em），用于把学号在方格内垂直居中
+// Tinos 数字高度（capHeight 662/1000 em，与 Times New Roman 一致），用于把学号在方格内垂直居中
 const DIGIT_HEIGHT_RATIO = 0.662;
 
 /* ------------------------------------------------------------------ 字体分段 */
 
-/** 判断是否为需要用宋体渲染的字符（汉字、中文标点、全角符号） */
+/** 判断是否为需要用中文字体渲染的字符（汉字、中文标点、全角符号） */
 function isCJK(cp) {
   return (
     (cp >= 0x2e80 && cp <= 0x9fff) || // 汉字、部首、假名（含 0x3000-0x303F 中文标点）
@@ -90,7 +90,7 @@ function drawSlot(page, fonts, text, slot, y) {
 /** 在方括号 [ ] 内打勾 */
 function drawTick(page, fonts, boxCenterX, baselineY) {
   const size = FONT_SIZE;
-  // 宋体 “√” 字形在字身内约占 0.285em~0.785em，据此把笔画对准方框中心
+  // “√” 字形在字身内约占 0.285em~0.785em，据此把笔画对准方框中心
   const inkLeft = 0.285 * size;
   const inkWidth = 0.5 * size;
   page.drawText('√', {
@@ -138,8 +138,8 @@ function drawPeriod(page, fonts, x, { start, end, days }, y, daysY = y) {
 
 /**
  * @param {Uint8Array} templateBytes  模板 PDF
- * @param {Uint8Array} latinFontBytes Times New Roman 裁剪字体
- * @param {Uint8Array} cjkFontBytes   宋体裁剪字体
+ * @param {Uint8Array} latinFontBytes 西文裁剪字体（Tinos）
+ * @param {Uint8Array} cjkFontBytes   中文裁剪字体（思源宋体）
  * @param {object} data               学生填写的数据
  * @returns {Promise<Uint8Array>}     生成好的 PDF
  */
