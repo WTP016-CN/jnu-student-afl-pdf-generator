@@ -91,6 +91,31 @@ textarea {
 
 textarea { resize: vertical; }
 
+/* 学子邮：用户名 + 自动生成的域名 */
+.email-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.email-input input {
+  flex: 1 1 14ch;
+  min-width: 12ch;
+}
+
+.email-suffix {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.email-suffix span {
+  color: var(--red);
+  font-weight: 600;
+}
+
 input:focus, textarea:focus {
   outline: none;
   border-color: var(--red);

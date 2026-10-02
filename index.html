@@ -66,9 +66,27 @@
       </div>
 
       <div class="field">
+        <span class="label">电邮</span>
+        <div class="options" role="radiogroup" aria-label="邮箱类型">
+          <label class="option"><input type="radio" name="emailMode" value="school" checked><span>学校学子邮</span></label>
+          <label class="option"><input type="radio" name="emailMode" value="personal"><span>自备邮箱</span></label>
+        </div>
+      </div>
+
+      <div class="field" id="schoolEmailField">
+        <label for="emailUser">学子邮用户名</label>
+        <div class="email-input">
+          <input id="emailUser" name="emailUser" autocomplete="off" maxlength="24"
+                 placeholder="申请学子邮时自己设定的用户名">
+          <span class="email-suffix">@stu<span id="emailYear">____</span>.jnu.edu.cn</span>
+        </div>
+        <p class="hint">域名按学号前 4 位（入学年份）自动生成，不用手填；用户名即 @ 前面的部分</p>
+      </div>
+
+      <div class="field" id="personalEmailField" hidden>
         <label for="email">电邮</label>
         <input id="email" name="email" type="email" inputmode="email" autocomplete="email"
-               maxlength="40" placeholder="如 zhangsan@stu.jnu.edu.cn" required>
+               maxlength="40" placeholder="如 zhangsan@163.com">
       </div>
     </fieldset>
 

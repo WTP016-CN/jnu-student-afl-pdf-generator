@@ -15,7 +15,7 @@ const data = {
   college: '信息科学技术学院',
   major: '计算机科学与技术',
   phone: '13800138000',
-  email: 'zhangsan@stu.jnu.edu.cn',
+  email: 'zhangsan@stu2023.jnu.edu.cn',  // 学子邮：域名按学号前 4 位生成
   startDate: '2026-10-08',
   endDate: '2026-10-12',
   days: 5,

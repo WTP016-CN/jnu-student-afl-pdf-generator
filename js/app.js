@@ -51,12 +51,12 @@ function loadAssets() {
 
 /* --------------------------------------------------------------- 表单处理 */
 
-function readForm() {
-  const fail = (field, message) => {
-    field.focus();
-    throw new Error(message);
-  };
+function fail(field, message) {
+  field.focus();
+  throw new Error(message);
+}
 
+function readForm() {
   const studentId = $('studentId').value.trim();
   if (!/^\d{1,10}$/.test(studentId)) fail($('studentId'), '请填写学号（最多 10 位数字）');
 
@@ -75,8 +75,7 @@ function readForm() {
   const phone = $('phone').value.trim();
   if (!/^[\d\-+() ]{7,20}$/.test(phone)) fail($('phone'), '请填写正确的手机号码');
 
-  const email = $('email').value.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail($('email'), '请填写正确的电邮地址');
+  const email = readEmail();
 
   const startDate = $('startDate').value;
   const endDate = $('endDate').value;
@@ -105,6 +104,50 @@ function readForm() {
     reasonType: reasonType.value,
     fillAttachment: $('fillAttachment').checked,
   };
+}
+
+/* --------------------------------------------------------- 电邮（学子邮 / 自备） */
+
+const SCHOOL_EMAIL_DOMAIN_SUFFIX = '.jnu.edu.cn';
+
+function emailMode() {
+  return form.querySelector('input[name="emailMode"]:checked').value;
+}
+
+/**
+ * 学子邮按“用户名@stu+入学年份.jnu.edu.cn”生成，入学年份取学号前 4 位。
+ * 例：学号 2025103491、用户名 zhangsan → zhangsan@stu2025.jnu.edu.cn
+ */
+function studentYear() {
+  const studentId = $('studentId').value.trim();
+  return /^\d{4}/.test(studentId) ? studentId.slice(0, 4) : null;
+}
+
+function schoolEmail() {
+  const year = studentYear();
+  return year ? `${$('emailUser').value.trim()}@stu${year}${SCHOOL_EMAIL_DOMAIN_SUFFIX}` : '';
+}
+
+function readEmail() {
+  if (emailMode() === 'personal') {
+    const email = $('email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail($('email'), '请填写正确的电邮地址');
+    return email;
+  }
+  if (!studentYear()) fail($('studentId'), '请先填写学号：学子邮域名要取学号前 4 位（入学年份）');
+  const user = $('emailUser').value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/.test(user)) {
+    fail($('emailUser'), '请填写学子邮用户名（字母或数字开头，可用 . _ -，最多 24 位）');
+  }
+  return schoolEmail();
+}
+
+/** 切换邮箱方式、并同步学子邮域名里的年份 */
+function updateEmailUi() {
+  const school = emailMode() === 'school';
+  $('schoolEmailField').hidden = !school;
+  $('personalEmailField').hidden = school;
+  $('emailYear').textContent = studentYear() || '____';
 }
 
 /** 请假天数按自然日计算，起止当天都算在内 */
@@ -177,6 +220,10 @@ form.addEventListener('submit', async (event) => {
 
 $('startDate').addEventListener('change', updateDays);
 $('endDate').addEventListener('change', updateDays);
+$('studentId').addEventListener('input', updateEmailUi);
+form.querySelectorAll('input[name="emailMode"]').forEach((el) => {
+  el.addEventListener('change', updateEmailUi);
+});
 
 // 提前把字体读进内存，点“生成”时就不用等
 loadAssets()
@@ -186,3 +233,4 @@ loadAssets()
   })
   .catch(() => setStatus('资源加载失败，请确认通过 http(s) 访问本页面。', 'error'));
 updateDays();
+updateEmailUi();
