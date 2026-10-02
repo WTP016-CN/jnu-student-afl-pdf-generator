@@ -3,8 +3,7 @@
 给暨南大学本科学生用的网页小工具：填好信息，一键下载填写完毕的《暨南大学学生请假申请表》PDF，
 打印后手写签名即可提交。纯前端实现，全部在你自己的浏览器里完成，不联网上传任何数据。
 
-> 在线版：<https://wtp016-cn.github.io/jnu-student-afl-pdf-generator/>
-> （未启用时，在仓库 Settings → Pages 选择从 `main` 分支根目录发布即可）
+> 在线版：<https://pages.wtp016.eu.org/>
 
 ## 预览
 
