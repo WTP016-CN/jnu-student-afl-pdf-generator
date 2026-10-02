@@ -1,6 +1,7 @@
 /** 页面交互：收集表单 → 调用 fill-pdf 生成 PDF → 下载。 */
 import fontkit from '../vendor/fontkit.es.min.js';
 import { buildLeavePdf } from './fill-pdf.js';
+import { COLLEGES, COLLEGE_OTHER as COLLEGE_OTHER_NAME } from './colleges.js';
 import { TEMPLATE_PDF_BASE64 } from './template-data.js';
 
 const $ = (id) => document.getElementById(id);
@@ -105,32 +106,139 @@ function readForm() {
   };
 }
 
+/* ------------------------------------------------------- 面板展开（初次进入） */
+
+/**
+ * 初始状态面板只占下方一部分，露出背景；用户向上滑动一点点，
+ * 面板就自动铺满整屏，之后所有滚动都在面板内部完成。
+ */
+const pageEl = $('page');
+let expanded = false;
+
+function expandPage() {
+  if (expanded) return;
+  expanded = true;
+  pageEl.classList.add('expanded');
+}
+
+function collapsePage() {
+  if (!expanded) return;
+  expanded = false;
+  pageEl.classList.remove('expanded');
+  pageEl.scrollTop = 0;
+}
+
+$('expandBtn').addEventListener('click', expandPage);
+pageEl.addEventListener('focusin', expandPage); // 直接点某个输入框也算开始填写
+
+let touchStartY = 0;
+pageEl.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
+pageEl.addEventListener('touchmove', (e) => {
+  const up = touchStartY - e.touches[0].clientY; // > 0 表示手指上滑
+  if (!expanded) {
+    if (up > 10) expandPage();
+  } else if (up < -10 && pageEl.scrollTop <= 0) {
+    collapsePage(); // 已经到顶了还往下拉，收回初始状态
+  }
+}, { passive: true });
+
+pageEl.addEventListener('wheel', (e) => {
+  if (!expanded) {
+    if (e.deltaY > 0) expandPage();
+  } else if (e.deltaY < 0 && pageEl.scrollTop <= 0) {
+    collapsePage();
+  }
+}, { passive: true });
+
+document.addEventListener('keydown', (e) => {
+  if (!expanded && ['ArrowDown', 'PageDown', ' '].includes(e.key)) expandPage();
+  else if (expanded && e.key === 'ArrowUp' && pageEl.scrollTop <= 0) collapsePage();
+});
+
 /* ------------------------------------------------------------------ 学院选择 */
 
-const COLLEGE_OTHER = '其他（手动填写）';
+const COLLEGE_OTHER = COLLEGE_OTHER_NAME;
+const collegePicker = $('collegePicker');
+const collegeSearch = $('collegeSearch');
 
-/** 学院名单就在页面上的 <datalist> 里，这里直接读，避免两处维护 */
-function collegeNames() {
-  return [...$('collegeList').options].map((option) => option.value);
+let selectedCollege = '';
+let matchedColleges = [];
+let optionEls = [];
+let activeIndex = 0;
+
+/** 按关键词筛选后渲染列表；“其他（手动填写）”始终排在最后，作为兜底入口 */
+function renderCollegeList(keyword = '') {
+  const kw = keyword.trim();
+  const matched = COLLEGES.filter((name) => !kw || name.includes(kw));
+  matchedColleges = matched.concat(COLLEGE_OTHER);
+  activeIndex = -1; // 默认不高亮，避免看起来像已经选中
+  optionEls = [];
+
+  const list = $('collegeOptions');
+  list.textContent = '';
+
+  if (!matched.length) {
+    const empty = document.createElement('li');
+    empty.className = 'sheet-empty';
+    empty.textContent = `没有包含“${kw}”的学院，可在下面手动填写`;
+    list.append(empty);
+  }
+
+  for (const name of matchedColleges) {
+    const item = document.createElement('li');
+    item.textContent = name;
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', String(name === selectedCollege));
+    item.addEventListener('click', () => chooseCollege(name));
+    list.append(item);
+    optionEls.push(item);
+  }
+}
+
+function highlight(index) {
+  if (!optionEls.length) return;
+  activeIndex = (index + optionEls.length) % optionEls.length;
+  optionEls.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+  optionEls[activeIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function openCollegePicker() {
+  collegeSearch.value = '';
+  renderCollegeList('');
+  collegePicker.hidden = false;
+  $('collegeTrigger').setAttribute('aria-expanded', 'true');
+  pageEl.classList.add('no-scroll');
+  collegeSearch.focus();
+}
+
+function closeCollegePicker() {
+  collegePicker.hidden = true;
+  $('collegeTrigger').setAttribute('aria-expanded', 'false');
+  pageEl.classList.remove('no-scroll');
+}
+
+function chooseCollege(name) {
+  selectedCollege = name;
+  const value = $('collegeValue');
+  value.textContent = name;
+  value.classList.toggle('placeholder', false);
+  closeCollegePicker();
+  updateCollegeUi();
 }
 
 function readCollege() {
-  const value = $('college').value.trim();
-  if (value === COLLEGE_OTHER) {
+  if (selectedCollege === COLLEGE_OTHER) {
     const other = $('collegeOther').value.trim();
     if (!other) fail($('collegeOther'), '请填写学院全称');
     return other;
   }
-  if (!value) fail($('college'), '请选择学院');
-  if (!collegeNames().includes(value)) {
-    fail($('college'), '请从列表中选择学院，或选“其他（手动填写）”后手填全称');
-  }
-  return value;
+  if (!selectedCollege) fail($('collegeTrigger'), '请选择学院');
+  return selectedCollege;
 }
 
 /** 选了“其他”才显示手动填写的输入框 */
 function updateCollegeUi() {
-  $('collegeOtherField').hidden = $('college').value.trim() !== COLLEGE_OTHER;
+  $('collegeOtherField').hidden = selectedCollege !== COLLEGE_OTHER;
 }
 
 /* --------------------------------------------------------- 电邮（学子邮 / 自备） */
@@ -248,7 +356,24 @@ form.addEventListener('submit', async (event) => {
 $('startDate').addEventListener('change', updateDays);
 $('endDate').addEventListener('change', updateDays);
 $('studentId').addEventListener('input', updateEmailUi);
-$('college').addEventListener('input', updateCollegeUi);
+$('collegeTrigger').addEventListener('click', openCollegePicker);
+$('collegeClose').addEventListener('click', closeCollegePicker);
+collegePicker.addEventListener('click', (event) => {
+  if (event.target === collegePicker) closeCollegePicker(); // 点遮罩关闭
+});
+collegeSearch.addEventListener('input', () => renderCollegeList(collegeSearch.value));
+collegeSearch.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') highlight(activeIndex + 1);
+  else if (event.key === 'ArrowUp') highlight(activeIndex - 1);
+  else if (event.key === 'Enter') {
+    event.preventDefault();
+    chooseCollege(matchedColleges[activeIndex] ?? matchedColleges[0]);
+  } else return;
+  event.preventDefault();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !collegePicker.hidden) closeCollegePicker();
+});
 form.querySelectorAll('input[name="emailMode"]').forEach((el) => {
   el.addEventListener('change', updateEmailUi);
 });
