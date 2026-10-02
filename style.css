@@ -6,7 +6,8 @@
   --line: #e2e5ea;
   --bg: #f6f7f9;
   --radius: 10px;
-  --footer-gap: 14px; /* 卡片与底部之间的留白 */
+  --page-gap: 14px;   /* 卡片与网页上下边缘的距离 */
+  --footer-h: 0px;    /* 底栏占的高度，滑到最底时由 JS 设为实际高度 */
 }
 
 * { box-sizing: border-box; }
@@ -41,30 +42,28 @@ body {
 
 .page {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  bottom: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  transition: top .42s cubic-bezier(.22, .61, .36, 1);
-}
-
-.page.expanded { top: 0; }
-
-/* 白色、完全不透明的圆角卡片（滚动容器里的主体） */
-.panel {
+  left: 50%;
+  top: var(--collapsed-top, 50%);
+  bottom: calc(var(--page-gap) + var(--footer-h));
+  width: 100%;
   max-width: 760px;
-  margin: 0 auto;
-  padding: 0 30px 22px;
+  padding: 10px 30px 24px;
+  transform: translateX(-50%);
   background: #fff;
   border-radius: 18px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, .26);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: top .42s cubic-bezier(.22, .61, .36, 1), bottom .3s ease;
 }
+
+.page.expanded { top: var(--page-gap); }
+
+/* 收起时只能点按钮展开，内容不可滚动 */
+.page:not(.expanded) { overflow: hidden; }
 
 .page.no-scroll { overflow: hidden; }
 
-/* 展开提示（仅初始状态可见） */
 .page-hint {
   display: flex;
   flex-direction: column;
@@ -77,22 +76,39 @@ body {
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: #d8dce1;
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
 }
 
+/* 这行文字在照片背景上，给个白色胶囊底才看得清 */
 .page-hint button {
-  padding: 2px 6px;
+  padding: 5px 13px;
   border: none;
-  background: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
   font: inherit;
   font-size: 12.5px;
-  color: var(--muted);
+  font-weight: 500;
+  color: #4b5563;
   cursor: pointer;
 }
 
+.page-hint button:hover { background: #fff; }
+
 .page-hint .chev { display: inline-block; margin-left: 2px; }
 
-.page.expanded .page-hint { display: none; }
+
+/* 校徽：居中在展开提示与标题之间 */
+
+
+/* 校徽：宽度与“向上滑动或点这里，展开填写”那行文字一致（实测 172px） */
+.emblem {
+  display: block;
+  margin: 8px auto 12px;
+  width: 172px;
+  height: 172px;
+}
 
 .site-header {
   padding: 26px 0 18px;
@@ -215,6 +231,79 @@ textarea { resize: vertical; }
   stroke: #6b7280;
   stroke-width: 1.6;
   stroke-linecap: round;
+}
+
+/*
+ * 填写状态提示：白色矩形作底，只有左侧圆角，右侧紧贴页面右边缘。
+ * 里面是圆形底色的 ✓/✕ 和一行文字说明。
+ */
+.validity {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 93px; /* 比符号（57px）宽约 35px */
+  padding: 9px 8px 11px;
+  background: #fff;
+  border-radius: 12px 0 0 12px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .16);
+  text-align: center;
+  pointer-events: none; /* 只是提示，不挡点击 */
+}
+
+.validity-text {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.validity-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #9aa1ab;
+}
+
+/* 大小与“共 x 项待完善”那行文字相当（实测 71–78px） */
+.validity-mark {
+  display: grid;
+  place-items: center;
+  width: 57px;
+  height: 57px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background-color .25s;
+}
+
+.validity.ok .validity-mark { background: #1f9d55; }
+.validity.bad .validity-mark { background: #d64545; }
+.validity.ok .validity-text { color: #1c7c54; }
+
+/* 左侧留白够放下提示条（760 卡片 + 两侧 250）才浮在右侧空白里，否则退到右上角 */
+@media (min-width: 1280px) {
+  .validity { top: 50%; right: 0; transform: translateY(-50%); }
+}
+
+/* 窄屏空间紧张，做得更紧凑，减少遮挡 */
+@media (max-width: 1279px) {
+  .validity {
+    top: 10px;
+    right: 0;
+    width: 89px;
+    padding: 8px 7px 10px;
+  }
+
+  .validity-mark { width: 53px; height: 53px; font-size: 26px; }
+  .validity-text { font-size: 11.5px; line-height: 1.4; }
+  .validity-note { font-size: 11px; }
+
 }
 
 .sheet-mask {
@@ -385,7 +474,17 @@ input:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(155, 27, 48, .12);
 }
 
-input:invalid:not(:placeholder-shown) { border-color: #d9534f; }
+/* 填写有误的字段：红框高亮（由 JS 加 .invalid） */
+input.invalid,
+select.invalid,
+textarea.invalid,
+.picker-trigger.invalid {
+  border-color: #d64545;
+  box-shadow: 0 0 0 3px rgba(214, 69, 69, .14);
+}
+
+.options.invalid .option { border-color: #d64545; }
+.options.invalid .option:has(input:checked) { background: rgba(214, 69, 69, .06); }
 
 .options { display: flex; flex-wrap: wrap; gap: 10px; }
 
@@ -434,12 +533,13 @@ input:invalid:not(:placeholder-shown) { border-color: #d9534f; }
 
 .legend-hint { margin: -4px 0 14px; }
 
+/* 只留按钮本身，外框全透明 */
 .actions {
   position: sticky;
   bottom: 0;
   margin-top: 4px;
-  padding: 14px 0 16px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 40%);
+  padding: 14px 0 22px;
+  background: none;
 }
 
 button[type="submit"] {
@@ -460,12 +560,16 @@ button[type="submit"] {
 button[type="submit"]:hover:not(:disabled) { background: var(--red-dark); }
 button[type="submit"]:disabled { background: #b9bec6; cursor: default; }
 
+/* 状态文字不再显示在按钮下方；保留在 DOM 里供读屏，内容会同步到右侧提示条 */
 .status {
-  margin: 10px 0 0;
-  min-height: 20px;
-  font-size: 13.5px;
-  color: var(--muted);
-  text-align: center;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .status.error { color: #c0392b; }
@@ -481,14 +585,25 @@ button[type="submit"]:disabled { background: #b9bec6; cursor: default; }
   font-size: 13.5px;
 }
 
-/* 全局底栏：整宽白色矩形，位于卡片下方，与卡片之间留间距 */
+/*
+ * 全局底栏：在卡片之外、整宽白色。
+ * 平时藏在屏幕下方，把卡片内容滑到最底时从底部升上来。
+ */
 .site-footer {
-  margin-top: var(--footer-gap);
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
   padding: 12px 16px 14px;
   background: #fff;
   border-top: 1px solid var(--line);
   text-align: center;
+  transform: translateY(110%);
+  transition: transform .3s ease;
 }
+
+.site-footer.show { transform: none; }
 
 .disclaimer {
   margin: 0;
@@ -510,9 +625,8 @@ button[type="submit"]:disabled { background: #b9bec6; cursor: default; }
 .notes li { margin-bottom: 4px; }
 
 @media (max-width: 520px) {
-  .page { top: 48%; }
-  .panel { padding: 0 16px 18px; border-radius: 16px; }
   .field-row { grid-template-columns: 1fr; gap: 0; }
+  .page { padding: 8px 16px 20px; border-radius: 16px; }
   .site-header { padding: 18px 0 14px; }
   .site-header h1 { font-size: 20px; }
 }

@@ -10,11 +10,11 @@
 <body>
 <div class="stage">
 <div class="page" id="page">
-<div class="panel">
 <div class="page-hint" id="pageHint">
-  <span class="grab" aria-hidden="true"></span>
-  <button type="button" id="expandBtn">向上滑动或点这里，展开填写<span class="chev" aria-hidden="true">⌃</span></button>
+  <button type="button" id="expandBtn">点击展开填写<span class="chev" aria-hidden="true">⌃</span></button>
 </div>
+
+<img class="emblem" src="assets/jnu-emblem.svg" alt="暨南大学校徽" width="76" height="76">
 <header class="site-header">
   <h1>暨南大学本科学生请假申请表</h1>
   <p class="subtitle">填写下面的信息，一键生成填好的 PDF，打印后手写签名即可提交。</p>
@@ -40,7 +40,7 @@
 
       <div class="field">
         <span class="label">学生类别</span>
-        <div class="options" role="radiogroup" aria-label="学生类别">
+        <div class="options" id="categoryOptions" role="radiogroup" aria-label="学生类别">
           <label class="option"><input type="radio" name="category" value="内招生" required><span>内招生</span></label>
           <label class="option"><input type="radio" name="category" value="外招生"><span>外招生</span></label>
         </div>
@@ -128,7 +128,7 @@
 
       <div class="field">
         <span class="label">原因类型</span>
-        <div class="options" role="radiogroup" aria-label="请假原因类型">
+        <div class="options" id="reasonOptions" role="radiogroup" aria-label="请假原因类型">
           <label class="option"><input type="radio" name="reasonType" value="health" required><span>因健康原因请假</span></label>
           <label class="option"><input type="radio" name="reasonType" value="other"><span>其他</span></label>
         </div>
@@ -160,7 +160,16 @@
     </ul>
   </section>
 </main>
-</div><!-- /.panel -->
+</div><!-- /.page -->
+</div>
+
+
+
+<div class="validity bad" id="validity" aria-hidden="true">
+  <span class="validity-mark" id="validityMark">✕</span>
+  <p class="validity-text" id="validityText">请填写学号</p>
+  <p class="validity-note" id="validityNote">共 11 项待完善</p>
+</div>
 
     <footer class="site-footer">
     <p class="disclaimer">
@@ -172,10 +181,6 @@
       <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">粤ICP备00000000号-1</a>
     </p>
   </footer>
-</div><!-- /.page -->
-</div>
-
-
 
 <div class="sheet-mask" id="collegePicker" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="collegePickerTitle">

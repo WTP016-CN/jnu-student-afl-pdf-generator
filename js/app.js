@@ -26,9 +26,24 @@ function decodeBase64(base64) {
 let assetsPromise = null;
 let cjkCharset = null;
 
+/**
+ * 状态文字只留给读屏，视觉上显示在右侧的提示条里：
+ * 生成进度、成功、失败都走同一条提示。
+ */
 function setStatus(text, kind = '') {
   statusEl.textContent = text;
   statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  if (!kind) {
+    refreshValidity(); // 空闲时交回常规的填写校验显示
+    return;
+  }
+  const ok = kind === 'done';
+  const badge = $('validity');
+  badge.classList.toggle('ok', ok);
+  badge.classList.toggle('bad', !ok);
+  $('validityMark').textContent = ok ? '✓' : '✕';
+  $('validityText').textContent = text;
+  $('validityNote').textContent = ok ? '可以打印了' : (kind === 'error' ? '请检查填写内容' : '请稍候');
 }
 
 /** 加载两份字体（只加载一次，之后走缓存） */
@@ -52,56 +67,119 @@ function loadAssets() {
 
 /* --------------------------------------------------------------- 表单处理 */
 
-function fail(field, message) {
-  field.focus();
-  throw new Error(message);
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^[\d\-+() ]{7,20}$/;
+const SCHOOL_USER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/;
 
-function readForm() {
+/**
+ * 校验规则集中在这里，返回 [{ el, message }]。
+ * el 是要标红高亮的元素（单选组用 .options 容器）。
+ * 提交时的报错文字和右上角的 ✓/✕ 指示都用它，避免两处规则不一致。
+ */
+function collectErrors() {
+  const errors = [];
+  const add = (el, message) => errors.push({ el, message });
+
   const studentId = $('studentId').value.trim();
-  if (!/^\d{1,10}$/.test(studentId)) fail($('studentId'), '请填写学号（最多 10 位数字）');
+  if (!studentId) add($('studentId'), '请填写学号');
+  else if (!/^\d{10}$/.test(studentId)) add($('studentId'), '学号应为 10 位数字');
 
-  const name = $('name').value.trim();
-  if (!name) fail($('name'), '请填写姓名');
+  if (!$('name').value.trim()) add($('name'), '请填写姓名');
 
-  const category = form.querySelector('input[name="category"]:checked');
-  if (!category) fail($('studentId'), '请选择学生类别（内招生 / 外招生）');
+  if (!form.querySelector('input[name="category"]:checked')) {
+    add($('categoryOptions'), '请选择学生类别（内招生 / 外招生）');
+  }
 
-  const college = readCollege();
+  if (!readCollege()) add($('collegeTrigger'), '请选择学院');
 
-  const major = $('major').value.trim();
-  if (!major) fail($('major'), '请填写专业');
+  if (!$('major').value.trim()) add($('major'), '请填写专业');
 
   const phone = $('phone').value.trim();
-  if (!/^[\d\-+() ]{7,20}$/.test(phone)) fail($('phone'), '请填写正确的手机号码');
+  if (!phone) add($('phone'), '请填写手机号');
+  else if (!PHONE_RE.test(phone)) add($('phone'), '手机号格式不正确');
 
-  const email = readEmail();
+  if (emailMode() === 'personal') {
+    const email = $('email').value.trim();
+    if (!email) add($('email'), '请填写电邮地址');
+    else if (!EMAIL_RE.test(email)) add($('email'), '电邮格式不正确');
+  } else {
+    const user = $('emailUser').value.trim();
+    if (!studentYear()) add($('studentId'), '学号前 4 位用于生成学子邮地址，请填写完整');
+    if (!user) add($('emailUser'), '请填写学子邮用户名');
+    else if (!SCHOOL_USER_RE.test(user)) add($('emailUser'), '学子邮用户名格式不正确');
+  }
 
   const startDate = $('startDate').value;
   const endDate = $('endDate').value;
-  if (!startDate) fail($('startDate'), '请选择开始日期');
-  if (!endDate) fail($('endDate'), '请选择结束日期');
-  const days = daysBetween(startDate, endDate);
-  if (days < 1) fail($('endDate'), '结束日期不能早于开始日期');
+  if (!startDate) add($('startDate'), '请选择开始日期');
+  if (!endDate) add($('endDate'), '请选择结束日期');
+  if (startDate && endDate && daysBetween(startDate, endDate) < 1) {
+    add($('startDate'), '开始日期晚于结束日期');
+    add($('endDate'), '结束日期早于开始日期');
+  }
 
-  const reasonType = form.querySelector('input[name="reasonType"]:checked');
-  if (!reasonType) fail($('startDate'), '请选择请假原因类型');
+  if (!form.querySelector('input[name="reasonType"]:checked')) {
+    add($('reasonOptions'), '请选择请假原因类型');
+  }
 
-  const unsupported = unsupportedChars(name + college + major);
-  if (unsupported.length) throw new Error(`这些字不在字体范围内，请替换或用其他字：${unsupported.join(' ')}`);
+  const unsupported = unsupportedChars(
+    $('name').value.trim() + readCollege() + $('major').value.trim(),
+  );
+  if (unsupported.length) {
+    add($('major'), `这些字不在字体范围内，请替换：${unsupported.join(' ')}`);
+  }
+
+  return errors;
+}
+
+/** 用过的字段才标红，避免一打开就满屏红 */
+const touched = new Set();
+let submitted = false;
+const isTouched = (el) => touched.has(el) || touched.has(el.closest?.('.field'));
+
+function refreshValidity() {
+  const errors = collectErrors();
+  const bad = new Set(errors.map((e) => e.el));
+
+  document.querySelectorAll('.invalid').forEach((el) => el.classList.remove('invalid'));
+  for (const el of bad) {
+    if (submitted || isTouched(el)) el.classList.add('invalid');
+  }
+
+  const ok = errors.length === 0;
+  const badge = $('validity');
+  badge.classList.toggle('ok', ok);
+  badge.classList.toggle('bad', !ok);
+  $('validityMark').textContent = ok ? '✓' : '✕';
+  $('validityText').textContent = ok ? '填写完整' : errors[0].message;
+  $('validityNote').textContent = ok
+    ? '可以生成 PDF'
+    : `${errors.length} 项待完善`;
+  return errors;
+}
+
+function readForm() {
+  submitted = true;
+  const errors = refreshValidity();
+  if (errors.length) {
+    const { el, message } = errors[0];
+    el.scrollIntoView?.({ block: 'center' });
+    el.focus?.();
+    throw new Error(message);
+  }
 
   return {
-    studentId,
-    name,
-    category: category.value,
-    college,
-    major,
-    phone,
-    email,
-    startDate,
-    endDate,
-    days,
-    reasonType: reasonType.value,
+    studentId: $('studentId').value.trim(),
+    name: $('name').value.trim(),
+    category: form.querySelector('input[name="category"]:checked').value,
+    college: readCollege(),
+    major: $('major').value.trim(),
+    phone: $('phone').value.trim(),
+    email: readEmail(),
+    startDate: $('startDate').value,
+    endDate: $('endDate').value,
+    days: daysBetween($('startDate').value, $('endDate').value),
+    reasonType: form.querySelector('input[name="reasonType"]:checked').value,
     fillAttachment: $('fillAttachment').checked,
   };
 }
@@ -115,10 +193,29 @@ function readForm() {
 const pageEl = $('page');
 let expanded = false;
 
+/**
+ * 收起状态只露出页头区（展开提示 + 校徽）和标题、说明，
+ * 下方的表单一点都不能露出来 —— 所以按它们的实际高度算位置，而不是写死比例。
+ */
+function layoutCollapsed() {
+  if (expanded) return;
+  const stage = document.querySelector('.stage');
+  const header = pageEl.querySelector('.site-header');
+  // 收起时露出的高度 = 从内容顶部到标题说明结束为止（含提示、校徽、顶部圆角盖）
+  const visible = header.getBoundingClientRect().bottom - pageEl.getBoundingClientRect().top + pageEl.scrollTop;
+  pageEl.style.setProperty('--collapsed-top', `${Math.max(0, stage.clientHeight - visible)}px`);
+}
+
 function expandPage() {
   if (expanded) return;
   expanded = true;
   pageEl.classList.add('expanded');
+  // 展开后滚到标题处：校徽与“向上滑动”提示滑出视野，标题顶在最上面
+  const title = pageEl.querySelector('.site-header h1');
+  if (title) {
+    const offset = title.getBoundingClientRect().top - pageEl.getBoundingClientRect().top + pageEl.scrollTop;
+    pageEl.scrollTop = Math.max(0, offset - 12);
+  }
 }
 
 function collapsePage() {
@@ -126,33 +223,52 @@ function collapsePage() {
   expanded = false;
   pageEl.classList.remove('expanded');
   pageEl.scrollTop = 0;
+  if (footerShown) {
+    footerShown = false;
+    footerEl.classList.remove('show');
+    pageEl.style.setProperty('--footer-h', '0px');
+  }
+  layoutCollapsed();
 }
 
+const footerEl = document.querySelector('.site-footer');
+let footerShown = false;
+
+/**
+ * 底栏只在内容滑到最底部时从屏幕下方升上来。
+ * 因为底栏出现会把卡片顶高一点，用两个阈值（出现/收起）避免来回抖动。
+ */
+function updateFooter() {
+  const remaining = pageEl.scrollHeight - pageEl.scrollTop - pageEl.clientHeight;
+  if (!footerShown && remaining <= 8) {
+    footerShown = true;
+    footerEl.classList.add('show');
+    pageEl.style.setProperty('--footer-h', `${footerEl.offsetHeight}px`);
+  } else if (footerShown && remaining > footerEl.offsetHeight + 24) {
+    footerShown = false;
+    footerEl.classList.remove('show');
+    pageEl.style.setProperty('--footer-h', '0px');
+  }
+}
+
+pageEl.addEventListener('scroll', updateFooter, { passive: true });
+
 $('expandBtn').addEventListener('click', expandPage);
-pageEl.addEventListener('focusin', expandPage); // 直接点某个输入框也算开始填写
+
+// 收起状态禁止滚动内容（只能点按钮展开）；展开后向上滑到顶可收回
+pageEl.addEventListener('wheel', (e) => {
+  if (expanded && e.deltaY < 0 && pageEl.scrollTop <= 0) collapsePage();
+}, { passive: true });
 
 let touchStartY = 0;
 pageEl.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
 pageEl.addEventListener('touchmove', (e) => {
   const up = touchStartY - e.touches[0].clientY; // > 0 表示手指上滑
-  if (!expanded) {
-    if (up > 10) expandPage();
-  } else if (up < -10 && pageEl.scrollTop <= 0) {
-    collapsePage(); // 已经到顶了还往下拉，收回初始状态
-  }
-}, { passive: true });
-
-pageEl.addEventListener('wheel', (e) => {
-  if (!expanded) {
-    if (e.deltaY > 0) expandPage();
-  } else if (e.deltaY < 0 && pageEl.scrollTop <= 0) {
-    collapsePage();
-  }
+  if (expanded && up < -10 && pageEl.scrollTop <= 0) collapsePage();
 }, { passive: true });
 
 document.addEventListener('keydown', (e) => {
-  if (!expanded && ['ArrowDown', 'PageDown', ' '].includes(e.key)) expandPage();
-  else if (expanded && e.key === 'ArrowUp' && pageEl.scrollTop <= 0) collapsePage();
+  if (expanded && e.key === 'ArrowUp' && pageEl.scrollTop <= 0) collapsePage();
 });
 
 /* ------------------------------------------------------------------ 学院选择 */
@@ -224,16 +340,13 @@ function chooseCollege(name) {
   value.classList.toggle('placeholder', false);
   closeCollegePicker();
   updateCollegeUi();
+  refreshValidity();
 }
 
+/** 返回最终要填进表格的学院名；未选择（或选了“其他”但没填）时返回空串 */
 function readCollege() {
-  if (selectedCollege === COLLEGE_OTHER) {
-    const other = $('collegeOther').value.trim();
-    if (!other) fail($('collegeOther'), '请填写学院全称');
-    return other;
-  }
-  if (!selectedCollege) fail($('collegeTrigger'), '请选择学院');
-  return selectedCollege;
+  if (selectedCollege !== COLLEGE_OTHER) return selectedCollege;
+  return $('collegeOther').value.trim();
 }
 
 /** 选了“其他”才显示手动填写的输入框 */
@@ -264,17 +377,7 @@ function schoolEmail() {
 }
 
 function readEmail() {
-  if (emailMode() === 'personal') {
-    const email = $('email').value.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail($('email'), '请填写正确的电邮地址');
-    return email;
-  }
-  if (!studentYear()) fail($('studentId'), '请先填写学号：学子邮域名要取学号前 4 位（入学年份）');
-  const user = $('emailUser').value.trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/.test(user)) {
-    fail($('emailUser'), '请填写学子邮用户名（字母或数字开头，可用 . _ -，最多 24 位）');
-  }
-  return schoolEmail();
+  return emailMode() === 'personal' ? $('email').value.trim() : schoolEmail();
 }
 
 /** 切换邮箱方式、并同步学子邮域名里的年份 */
@@ -353,6 +456,13 @@ form.addEventListener('submit', async (event) => {
   }
 });
 
+form.addEventListener('input', refreshValidity);
+form.addEventListener('change', refreshValidity);
+form.addEventListener('focusout', (event) => {
+  touched.add(event.target);
+  refreshValidity();
+});
+
 $('startDate').addEventListener('change', updateDays);
 $('endDate').addEventListener('change', updateDays);
 $('studentId').addEventListener('input', updateEmailUi);
@@ -388,3 +498,6 @@ loadAssets()
 updateDays();
 updateEmailUi();
 updateCollegeUi();
+refreshValidity();
+layoutCollapsed();
+window.addEventListener('resize', layoutCollapsed);
