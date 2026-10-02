@@ -130,6 +130,22 @@ python tools/check-output.py build/*.pdf   # 检查内嵌字体有没有缺字�
 
 换了模板 PDF 之后要重新执行 `embed-template.mjs`。
 
+## 缓存与版本号
+
+GitHub Pages 对 `css` / `js` / 图片一律缓存 **4 小时**（`Cache-Control: max-age=14400`），
+而 HTML 只缓存 10 分钟。这会导致发布后出现「新版 HTML + 旧版资源」的错位，页面样式错乱。
+
+因此所有资源的 URL 都带了一个版本号，**统一写在 `index.html` 里**：
+
+- `<link rel="stylesheet" href="style.css?v=…">`
+- `<script type="module" src="js/app.js?v=…">`
+- `<script type="importmap">` 里把各个 JS 模块映射到带版本号的 URL
+- `assets/background.jpg`、`assets/jnu-emblem.svg` 的引用
+- 字体路径由 `app.js` 从自身 URL 取版本号自动拼接（`new URL(import.meta.url).search`）
+
+**改了样式或脚本之后，把 `index.html` 里的 `v=20261003a` 递增一下**（例如 `v=20261003b`），
+访客就会立刻拿到新资源，不用等 4 小时缓存过期。版本号只有这一处需要维护。
+
 ## 已知限制
 
 - 字体覆盖 GB2312 全部汉字（7547 个）。生僻字（如“燚”“㸚”）不在范围内，

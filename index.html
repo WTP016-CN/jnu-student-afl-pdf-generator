@@ -5,8 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>暨南大学本科学生请假申请表 · 一键生成</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239b1b30'/><text x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'>%E8%AF%B7</text></svg>">
-<!-- 加版本号：CDN 对 css/js 缓存 4 小时，改样式时把 v 递增即可立刻生效 -->
+<!--
+  版本号统一写在这里：GitHub Pages 对 css/js/图片缓存 4 小时、HTML 只缓存 10 分钟，
+  不加版本号会出现「新 HTML + 旧资源」的错位。改样式或脚本后把下面的 V 递增即可。
+-->
 <link rel="stylesheet" href="style.css?v=20261003a">
+<script type="importmap">
+{
+  "scopes": {
+    "./js/": {
+      "./js/fill-pdf.js": "./js/fill-pdf.js?v=20261003a",
+      "./js/pdf-slots.js": "./js/pdf-slots.js?v=20261003a",
+      "./js/colleges.js": "./js/colleges.js?v=20261003a",
+      "./js/template-data.js": "./js/template-data.js?v=20261003a",
+      "./vendor/pdf-lib.esm.min.js": "./vendor/pdf-lib.esm.min.js?v=20261003a",
+      "./vendor/fontkit.es.min.js": "./vendor/fontkit.es.min.js?v=20261003a"
+    },
+    "./vendor/": {
+      "./vendor/pako.esm.js": "./vendor/pako.esm.js?v=20261003a"
+    }
+  }
+}
+</script>
 </head>
 <body>
 <div class="stage">
@@ -15,7 +35,7 @@
   <button type="button" id="expandBtn">点击展开填写<span class="chev" aria-hidden="true">⌃</span></button>
 </div>
 
-<img class="emblem" src="assets/jnu-emblem.svg" alt="暨南大学校徽" width="76" height="76">
+<img class="emblem" src="assets/jnu-emblem.svg?v=20261003a" alt="暨南大学校徽" width="76" height="76">
 <header class="site-header">
   <h1>暨南大学本科学生请假申请表</h1>
   <p class="subtitle">填写下面的信息，一键生成填好的 PDF，打印后手写签名即可提交。</p>
@@ -200,6 +220,6 @@
   </div>
 </div>
 
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=20261003a"></script>
 </body>
 </html>

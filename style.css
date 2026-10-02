@@ -25,7 +25,7 @@ body {
   font-size: 15px;
   line-height: 1.6;
   /* 校园全景：初始露出一截，重点让牌坊落在可见区域 */
-  background: var(--bg) url("assets/background.jpg") center center / cover no-repeat;
+  background: var(--bg) url("assets/background.jpg?v=20261003a") center center / cover no-repeat;
 }
 
 /*

@@ -11,9 +11,12 @@ const submitBtn = $('submitBtn');
 
 // 模板以 base64 内嵌在 js/template-data.js 里，不走网络请求：
 // 有些浏览器安全软件会按内容识别 PDF 并掐断响应，fetch 会失败。
+// 版本号直接取自本模块的 URL（index.html 里统一维护），字体也一起走缓存更新
+const ASSET_VERSION = new URL(import.meta.url).search;
+
 const ASSETS = {
-  cjkFontBytes: 'assets/fonts/noto-serif-sc-subset.ttf',
-  latinFontBytes: 'assets/fonts/tinos-subset.ttf',
+  cjkFontBytes: `assets/fonts/noto-serif-sc-subset.ttf${ASSET_VERSION}`,
+  latinFontBytes: `assets/fonts/tinos-subset.ttf${ASSET_VERSION}`,
 };
 
 function decodeBase64(base64) {
