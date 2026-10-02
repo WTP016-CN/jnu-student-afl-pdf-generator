@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>暨南大学本科学生请假申请表 · 一键生成</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239b1b30'/><text x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'>%E8%AF%B7</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>暨南大学本科学生请假申请表</h1>
+  <p class="subtitle">填写下面的信息，一键生成填好的 PDF，打印后手写签名即可提交。</p>
+</header>
+
+<main>
+  <form id="form" novalidate>
+
+    <fieldset class="card">
+      <legend>基本信息</legend>
+
+      <div class="field">
+        <label for="studentId">学号</label>
+        <input id="studentId" name="studentId" inputmode="numeric" autocomplete="off"
+               maxlength="10" placeholder="10 位学号，如 2023101234" required>
+        <p class="hint">将逐格填入申请表上的 10 个方格</p>
+      </div>
+
+      <div class="field">
+        <label for="name">姓名</label>
+        <input id="name" name="name" autocomplete="name" maxlength="20" placeholder="如 张三" required>
+      </div>
+
+      <div class="field">
+        <span class="label">学生类别</span>
+        <div class="options" role="radiogroup" aria-label="学生类别">
+          <label class="option"><input type="radio" name="category" value="内招生" required><span>内招生</span></label>
+          <label class="option"><input type="radio" name="category" value="外招生"><span>外招生</span></label>
+        </div>
+        <p class="hint">内招生为内地学生；外招生为港澳台侨及外国留学生</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>学院与专业</legend>
+
+      <div class="field">
+        <label for="college">学院</label>
+        <input id="college" name="college" maxlength="30" placeholder="如 信息科学技术学院" required>
+      </div>
+
+      <div class="field">
+        <label for="major">专业</label>
+        <input id="major" name="major" maxlength="30" placeholder="如 计算机科学与技术" required>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>联系方式</legend>
+      <p class="hint legend-hint">申请表上注明“请书写工整”，请仔细核对。</p>
+
+      <div class="field">
+        <label for="phone">手机</label>
+        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+               maxlength="20" placeholder="如 13800138000" required>
+      </div>
+
+      <div class="field">
+        <label for="email">电邮</label>
+        <input id="email" name="email" type="email" inputmode="email" autocomplete="email"
+               maxlength="40" placeholder="如 zhangsan@stu.jnu.edu.cn" required>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>请假时间</legend>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="startDate">开始日期</label>
+          <input id="startDate" name="startDate" type="date" required>
+        </div>
+        <div class="field">
+          <label for="endDate">结束日期</label>
+          <input id="endDate" name="endDate" type="date" required>
+        </div>
+      </div>
+      <p class="hint" id="daysHint">选择起止日期后自动计算请假天数</p>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>请假原因</legend>
+
+      <div class="field">
+        <span class="label">原因类型</span>
+        <div class="options" role="radiogroup" aria-label="请假原因类型">
+          <label class="option"><input type="radio" name="reasonType" value="health" required><span>因健康原因请假</span></label>
+          <label class="option"><input type="radio" name="reasonType" value="other"><span>其他</span></label>
+        </div>
+        <p class="hint">申请表上对应的小方框会被打勾；横线上的具体情况说明请打印后手写</p>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>其他</legend>
+      <label class="option checkbox">
+        <input type="checkbox" id="fillAttachment" checked>
+        <span>同时填写第 2 页附件的准假条（学院、专业、姓名、学号、天数、起止日期）</span>
+      </label>
+      <p class="hint">附件由学院审批盖章时使用，取消勾选则留空由学院填写。</p>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" id="submitBtn">生成并下载 PDF</button>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </div>
+  </form>
+
+  <section class="notes">
+    <h2>提示</h2>
+    <ul>
+      <li>所有内容都在你自己的浏览器里处理，不会上传到任何服务器。</li>
+      <li>申请表的“申请人签名”和“日期”需要打印后手写，因此 PDF 中留空。</li>
+      <li>请用 A4 纸单面打印，第 2 页附件按学院要求提交。</li>
+    </ul>
+  </section>
+</main>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

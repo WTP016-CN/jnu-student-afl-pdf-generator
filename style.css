@@ -1,0 +1,197 @@
+:root {
+  --red: #9b1b30;          /* 暨南大学校徽红 */
+  --red-dark: #7d1526;
+  --ink: #1f2328;
+  --muted: #6b7280;
+  --line: #e2e5ea;
+  --bg: #f6f7f9;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 16px 64px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Source Han Sans SC", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.site-header {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 36px 0 20px;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: .5px;
+  border-left: 4px solid var(--red);
+  padding-left: 12px;
+}
+
+.subtitle {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+main { max-width: 720px; margin: 0 auto; }
+
+.card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px 22px 8px;
+  margin: 0 0 16px;
+}
+
+.card legend {
+  padding: 0 8px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--red);
+}
+
+.field { margin-bottom: 18px; }
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.field label,
+.field .label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+input[type="date"],
+input:not([type]),
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ced3da;
+  border-radius: 8px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+textarea { resize: vertical; }
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(155, 27, 48, .12);
+}
+
+input:invalid:not(:placeholder-shown) { border-color: #d9534f; }
+
+.options { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid #ced3da;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 400;
+  background: #fff;
+  transition: border-color .15s, background .15s;
+}
+
+.option:hover { border-color: #a9b0ba; }
+
+.option:has(input:checked) {
+  border-color: var(--red);
+  background: rgba(155, 27, 48, .06);
+  font-weight: 600;
+}
+
+.option:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(155, 27, 48, .15); }
+
+.option input { accent-color: var(--red); margin: 0; }
+
+.option.checkbox {
+  align-items: flex-start;
+  width: 100%;
+  line-height: 1.5;
+}
+
+.hint {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.legend-hint { margin: -4px 0 14px; }
+
+.actions {
+  position: sticky;
+  bottom: 0;
+  padding: 14px 0 10px;
+  background: linear-gradient(to bottom, rgba(246,247,249,0), var(--bg) 35%);
+}
+
+button[type="submit"] {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+button[type="submit"]:hover:not(:disabled) { background: var(--red-dark); }
+button[type="submit"]:disabled { background: #b9bec6; cursor: default; }
+
+.status {
+  margin: 10px 0 0;
+  min-height: 20px;
+  font-size: 13.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.status.error { color: #c0392b; }
+.status.done { color: #1c7c54; }
+
+.notes {
+  margin-top: 8px;
+  padding: 18px 22px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.notes h2 { margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+.notes ul { margin: 0; padding-left: 20px; }
+.notes li { margin-bottom: 4px; }
+
+@media (max-width: 520px) {
+  .field-row { grid-template-columns: 1fr; gap: 0; }
+  .site-header { padding-top: 24px; }
+  .site-header h1 { font-size: 20px; }
+  .card { padding: 16px 16px 4px; }
+}

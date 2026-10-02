@@ -1,0 +1,11 @@
+{
+  "name": "jnu-student-afl-pdf-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "暨南大学本科学生请假申请表一键生成（纯前端页面）",
+  "type": "module",
+  "scripts": {
+    "serve": "python -m http.server 8080",
+    "verify": "node tools/verify.mjs"
+  }
+}
