@@ -69,9 +69,9 @@
 整个仓库就是静态站点，把文件放到任意静态托管即可，推荐 GitHub Pages：
 仓库 Settings → Pages → Source 选 `main` 分支根目录 → 保存。
 
-首次打开需加载约 3.2 MB，其中中文思源宋体 1.8 MB（gzip 后）、背景图
-`assets/background.jpg` 0.7 MB（4000×882，JPEG q85；原 PNG 是 5.2 MB，同样像素尺寸下
-压缩到 1/7，缩放到实际显示尺寸后 PSNR 仍有 40 dB 以上，肉眼无差别）。
+首次打开需加载约 3.3 MB，其中中文思源宋体 1.8 MB（gzip 后）、背景图
+`assets/background.jpg` 0.8 MB（4000×2219，JPEG q85；源照片是 5.1 MB 的 PNG，同样像素尺寸下
+压缩到 1/6，PSNR 45.5 dB，肉眼无差别）。
 
 注意：页面用 `fetch` 读取字体，**不能直接双击 `index.html`**（`file://` 下浏览器会拦截）。
 
@@ -93,7 +93,7 @@ js/fill-pdf.js          把数据画到模板上（浏览器和 Node 共用）
 js/pdf-slots.js         模板中各填写位置的坐标（由 PDF 实测得到）
 js/template-data.js     模板 PDF 的 base64（由脚本生成）
 assets/template.pdf     请假申请表模板
-assets/background.jpg   页面背景图（校园全景，4000×882 JPEG）
+assets/background.jpg   页面背景图（校园牌坊，4000×2219 JPEG）
 assets/jnu-emblem.svg   页面顶部校徽（卡片内）
 assets/fonts/           裁剪后的开源字体及许可
 vendor/                 第三方库，见 vendor/PATCHES.md
@@ -135,16 +135,23 @@ python tools/check-output.py build/*.pdf   # 检查内嵌字体有没有缺字�
 GitHub Pages 对 `css` / `js` / 图片一律缓存 **4 小时**（`Cache-Control: max-age=14400`），
 而 HTML 只缓存 10 分钟。这会导致发布后出现「新版 HTML + 旧版资源」的错位，页面样式错乱。
 
-因此所有资源的 URL 都带了一个版本号，**统一写在 `index.html` 里**：
+因此所有资源的 URL 都带了一个版本号，写在两个文件里：
 
-- `<link rel="stylesheet" href="style.css?v=…">`
-- `<script type="module" src="js/app.js?v=…">`
-- `<script type="importmap">` 里把各个 JS 模块映射到带版本号的 URL
-- `assets/background.jpg`、`assets/jnu-emblem.svg` 的引用
-- 字体路径由 `app.js` 从自身 URL 取版本号自动拼接（`new URL(import.meta.url).search`）
+- `index.html`：`<link rel="stylesheet">`、`<script type="module" src="js/app.js?v=…">`、
+  `<script type="importmap">` 里的各个 JS 模块、校徽 `<img class="emblem">`
+- `style.css`：`background` 里的 `assets/background.jpg`
 
-**改了样式或脚本之后，把 `index.html` 里的 `v=20261003a` 递增一下**（例如 `v=20261003b`），
-访客就会立刻拿到新资源，不用等 4 小时缓存过期。版本号只有这一处需要维护。
+字体路径由 `app.js` 从自身 URL 取版本号自动拼接（`new URL(import.meta.url).search`），
+跟着 `js/app.js` 的版本号走，不用单独维护。
+
+**改了哪个资源，就递增引用它的那一处版本号**（例如 `v=20261003a` → `v=20261003b`），
+访客就会立刻拿到新资源，不用等 4 小时缓存过期。注意连带关系：`style.css` 的内容改了，
+`index.html` 里的 `style.css?v=…` 也要一起递增，否则访客拿到的是缓存里的整份旧样式；
+换背景图同理。改完确认没有遗漏：
+
+```bash
+grep -rn "v=[0-9]\{8\}" index.html style.css
+```
 
 ## 已知限制
 

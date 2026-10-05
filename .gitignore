@@ -1,3 +1,25 @@
+# 构建产物与开发中间文件
+# tools/verify.mjs 的输出、tools/prepare-fonts.py 下载的原始字体（约 25 MB）都在这里
 build/
+
+# Python 缓存（tools/*.py 运行时生成）
 __pycache__/
+*.py[cod]
+
+# Node（本项目没有打包步骤，npm 只用来跑 npm run serve / verify）
 node_modules/
+npm-debug.log*
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 大尺寸源图只在本地保留，仓库里提交压缩后的成品
+# （当前：微信图片_2026-10-03_184016_119.png 是 assets/background.jpg 的源照片，
+#   4000×2219 PNG 5.1 MB；README 用的预览图请放 docs/）
+微信图片_*.png
