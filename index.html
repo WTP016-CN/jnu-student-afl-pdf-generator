@@ -4,20 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>暨南大学本科学生请假申请表 · 一键生成</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%239b1b30'/><text x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'>%E8%AF%B7</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23007d90'/><text x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'>%E8%AF%B7</text></svg>">
 <!--
   版本号统一写在这里：GitHub Pages 对 css/js/图片缓存 4 小时、HTML 只缓存 10 分钟，
   不加版本号会出现「新 HTML + 旧资源」的错位。改样式或脚本后把下面的 V 递增即可。
 -->
-<link rel="stylesheet" href="style.css?v=20261003b">
+<link rel="stylesheet" href="style.css?v=20261006b">
 <script type="importmap">
 {
   "scopes": {
     "./js/": {
-      "./js/fill-pdf.js": "./js/fill-pdf.js?v=20261003a",
+      "./js/fill-pdf.js": "./js/fill-pdf.js?v=20261005c",
       "./js/pdf-slots.js": "./js/pdf-slots.js?v=20261003a",
       "./js/colleges.js": "./js/colleges.js?v=20261003a",
       "./js/template-data.js": "./js/template-data.js?v=20261003a",
+      "./js/font-coverage.js": "./js/font-coverage.js?v=20261005a",
       "./vendor/pdf-lib.esm.min.js": "./vendor/pdf-lib.esm.min.js?v=20261003a",
       "./vendor/fontkit.es.min.js": "./vendor/fontkit.es.min.js?v=20261003a"
     },
@@ -32,7 +33,10 @@
 <div class="stage">
 <div class="page" id="page">
 <div class="page-hint" id="pageHint">
-  <button type="button" id="expandBtn">点击展开填写<span class="chev" aria-hidden="true">⌃</span></button>
+  <button type="button" id="expandBtn">
+    点击展开填写
+    <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10.5L8 6.5l4 4"/></svg>
+  </button>
 </div>
 
 <img class="emblem" src="assets/jnu-emblem.svg?v=20261003a" alt="暨南大学校徽" width="76" height="76">
@@ -51,7 +55,6 @@
         <label for="studentId">学号</label>
         <input id="studentId" name="studentId" inputmode="numeric" autocomplete="off"
                maxlength="10" placeholder="10 位学号，如 2023101234" required>
-        <p class="hint">将逐格填入申请表上的 10 个方格</p>
       </div>
 
       <div class="field">
@@ -65,7 +68,6 @@
           <label class="option"><input type="radio" name="category" value="内招生" required><span>内招生</span></label>
           <label class="option"><input type="radio" name="category" value="外招生"><span>外招生</span></label>
         </div>
-        <p class="hint">内招生为内地学生；外招生为港澳台侨及外国留学生</p>
       </div>
     </fieldset>
 
@@ -79,7 +81,6 @@
           <span id="collegeValue" class="placeholder">请选择学院</span>
           <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6L8 10.5 12.5 6"/></svg>
         </button>
-        <p class="hint">点击后可按关键词搜索，共 43 个学院</p>
       </div>
 
       <div class="field" id="collegeOtherField" hidden>
@@ -95,7 +96,6 @@
 
     <fieldset class="card">
       <legend>联系方式</legend>
-      <p class="hint legend-hint">申请表上注明“请书写工整”，请仔细核对。</p>
 
       <div class="field">
         <label for="phone">手机</label>
@@ -118,7 +118,6 @@
                  placeholder="申请学子邮时自己设定的用户名">
           <span class="email-suffix">@stu<span id="emailYear">____</span>.jnu.edu.cn</span>
         </div>
-        <p class="hint">域名按学号前 4 位（入学年份）自动生成，不用手填；用户名即 @ 前面的部分</p>
       </div>
 
       <div class="field" id="personalEmailField" hidden>
@@ -129,31 +128,32 @@
     </fieldset>
 
     <fieldset class="card">
-      <legend>请假时间</legend>
+      <legend>请假时间 <span class="optional">可留空</span></legend>
 
       <div class="field-row">
         <div class="field">
           <label for="startDate">开始日期</label>
-          <input id="startDate" name="startDate" type="date" required>
+          <input id="startDate" name="startDate" type="date">
         </div>
         <div class="field">
           <label for="endDate">结束日期</label>
-          <input id="endDate" name="endDate" type="date" required>
+          <input id="endDate" name="endDate" type="date">
         </div>
       </div>
-      <p class="hint" id="daysHint">选择起止日期后自动计算请假天数</p>
+      <p class="hint" id="daysHint">填了会自动算出天数</p>
     </fieldset>
 
     <fieldset class="card">
-      <legend>请假原因</legend>
+      <legend>请假原因 <span class="optional">可留空</span></legend>
 
       <div class="field">
         <span class="label">原因类型</span>
-        <div class="options" id="reasonOptions" role="radiogroup" aria-label="请假原因类型">
-          <label class="option"><input type="radio" name="reasonType" value="health" required><span>因健康原因请假</span></label>
+        <!-- data-clearable：这一组可以留空，再点一次已选中的那一项就取消选择 -->
+        <div class="options" id="reasonOptions" role="radiogroup" aria-label="请假原因类型" data-clearable>
+          <label class="option"><input type="radio" name="reasonType" value="health"><span>因健康原因请假</span></label>
           <label class="option"><input type="radio" name="reasonType" value="other"><span>其他</span></label>
         </div>
-        <p class="hint">申请表上对应的小方框会被打勾；横线上的具体情况说明请打印后手写</p>
+        <p class="hint">再点一下已选中的项可取消选择</p>
       </div>
     </fieldset>
 
@@ -163,12 +163,10 @@
         <input type="checkbox" id="fillAttachment" checked>
         <span>同时填写第 2 页附件的准假条（学院、专业、姓名、学号、天数、起止日期）</span>
       </label>
-      <p class="hint">附件由学院审批盖章时使用，取消勾选则留空由学院填写。</p>
     </fieldset>
 
     <div class="actions">
       <button type="submit" id="submitBtn">生成并下载 PDF</button>
-      <p class="status" id="status" role="status" aria-live="polite"></p>
     </div>
   </form>
 
@@ -181,18 +179,10 @@
     </ul>
   </section>
 </main>
-</div><!-- /.page -->
-</div>
 
-
-
-<div class="validity bad" id="validity" aria-hidden="true">
-  <span class="validity-mark" id="validityMark">✕</span>
-  <p class="validity-text" id="validityText">请填写学号</p>
-  <p class="validity-note" id="validityNote">共 11 项待完善</p>
-</div>
-
-    <footer class="site-footer">
+  <!-- 声明放在卡片内容的最后一块：随内容滚出来，滚到最底它本来就在视野里，
+       不做浮层，也就没有「什么时候弹出/收起」这回事 -->
+  <footer class="site-footer">
     <p class="disclaimer">
       免责声明：本网页与暨南大学及相关单位无任何关联，为个人制作的非官方工具，仅供参考使用。
       请假是否批准、表格格式是否符合要求，以学院和教务处的规定为准。
@@ -202,6 +192,18 @@
       <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">粤ICP备00000000号-1</a>
     </p>
   </footer>
+</div><!-- /.page -->
+</div>
+
+
+
+<div class="validity bad" id="validity" aria-hidden="true">
+  <span class="validity-mark" id="validityMark">✕</span>
+  <div class="validity-meter"><i id="validityBar"></i></div>
+  <p class="validity-count" id="validityCount">0 / 9</p>
+  <p class="validity-text" id="validityText">请填写学号</p>
+  <p class="validity-note" id="validityNote">还差 7 项必填</p>
+</div>
 
 <div class="sheet-mask" id="collegePicker" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="collegePickerTitle">
@@ -220,6 +222,32 @@
   </div>
 </div>
 
-<script type="module" src="js/app.js?v=20261003a"></script>
+<!-- 生成 PDF 的全局弹窗：进度与结果都走这里，右侧那条填写提示不参与生成过程 -->
+<div class="export-mask" id="exportMask" hidden>
+  <div class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="exportText">
+    <span class="export-icon" id="exportIcon" aria-hidden="true"></span>
+    <p class="export-text" id="exportText" aria-live="polite"></p>
+    <button type="button" class="btn btn-primary" id="exportClose" hidden>关闭</button>
+  </div>
+</div>
+
+<!-- 生成完先预览，确认无误才真正下载。iframe 里是浏览器自带的 PDF 阅读器，
+     显示的就是真实成品；个别浏览器看不了，先用 #previewOpen 直接下载兜底 -->
+<div class="preview-mask" id="previewMask" hidden>
+  <div class="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+    <div class="preview-head">
+      <h2 id="previewTitle">预览</h2>
+      <p class="preview-tip">确认无误再下载；要改内容就返回修改。</p>
+    </div>
+    <iframe class="preview-frame" id="previewFrame" title="生成的请假申请表预览"></iframe>
+    <div class="preview-actions">
+      <a class="preview-open" id="previewOpen" href="#" download>打不开预览？直接下载</a>
+      <button type="button" class="btn btn-ghost" id="previewBack">返回修改</button>
+      <button type="button" class="btn btn-primary" id="previewConfirm">确认无误，下载 PDF</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js?v=20261006b"></script>
 </body>
 </html>

@@ -1,12 +1,11 @@
 /** 页面交互：收集表单 → 调用 fill-pdf 生成 PDF → 下载。 */
-import fontkit from '../vendor/fontkit.es.min.js';
 import { buildLeavePdf } from './fill-pdf.js';
 import { COLLEGES, COLLEGE_OTHER as COLLEGE_OTHER_NAME } from './colleges.js';
 import { TEMPLATE_PDF_BASE64 } from './template-data.js';
+import { CJK_COVERAGE_RANGES } from './font-coverage.js';
 
 const $ = (id) => document.getElementById(id);
 const form = $('form');
-const statusEl = $('status');
 const submitBtn = $('submitBtn');
 
 // 模板以 base64 内嵌在 js/template-data.js 里，不走网络请求：
@@ -14,10 +13,22 @@ const submitBtn = $('submitBtn');
 // 版本号直接取自本模块的 URL（index.html 里统一维护），字体也一起走缓存更新
 const ASSET_VERSION = new URL(import.meta.url).search;
 
+// 这两份字体只有生成 PDF 时用得到（页面显示用的是 style.css 里那份黑体），
+// 所以不在打开页面时就下载，等用户点「生成」再取。
 const ASSETS = {
   cjkFontBytes: `assets/fonts/noto-serif-sc-subset.ttf${ASSET_VERSION}`,
   latinFontBytes: `assets/fonts/tinos-subset.ttf${ASSET_VERSION}`,
 };
+
+/**
+ * PDF 里的宋体子集覆盖了哪些字。这份表由 tools/prepare-fonts.py 从裁好的字体里
+ * 导出（js/font-coverage.js），因此做生僻字检查不必先把 1.8 MB 的字体下下来。
+ */
+const cjkCharset = new Set();
+for (const part of CJK_COVERAGE_RANGES.split(',')) {
+  const [from, to = from] = part.split('-');
+  for (let cp = parseInt(from, 16); cp <= parseInt(to, 16); cp += 1) cjkCharset.add(cp);
+}
 
 function decodeBase64(base64) {
   const binary = atob(base64);
@@ -27,29 +38,87 @@ function decodeBase64(base64) {
 }
 
 let assetsPromise = null;
-let cjkCharset = null;
 
 /**
- * 状态文字只留给读屏，视觉上显示在右侧的提示条里：
- * 生成进度、成功、失败都走同一条提示。
+ * 生成 PDF 的进度与结果都走这个全局弹窗。
+ *
+ * 右侧那条填写提示只反映表单状态，生成过程中一动不动 —— 两种信息混在一条提示里，
+ * 用户分不清「表单填错了」还是「正在生成」。
  */
-function setStatus(text, kind = '') {
-  statusEl.textContent = text;
-  statusEl.className = 'status' + (kind ? ' ' + kind : '');
-  if (!kind) {
-    refreshValidity(); // 空闲时交回常规的填写校验显示
-    return;
-  }
-  const ok = kind === 'done';
-  const badge = $('validity');
-  badge.classList.toggle('ok', ok);
-  badge.classList.toggle('bad', !ok);
-  $('validityMark').textContent = ok ? '✓' : '✕';
-  $('validityText').textContent = text;
-  $('validityNote').textContent = ok ? '可以打印了' : (kind === 'error' ? '请检查填写内容' : '请稍候');
+let exportBusy = false;
+
+function showExport(text, kind = 'busy') {
+  exportBusy = kind === 'busy';
+  const icon = $('exportIcon');
+  icon.className = `export-icon is-${kind}`;
+  icon.textContent = kind === 'done' ? '✓' : (kind === 'error' ? '✕' : '');
+  $('exportText').textContent = text;
+  $('exportClose').hidden = exportBusy; // 生成中不给关，免得半途中断
+  $('exportMask').hidden = false;
+  if (!exportBusy) $('exportClose').focus();
 }
 
-/** 加载两份字体（只加载一次，之后走缓存） */
+function closeExport() {
+  if (exportBusy) return;
+  $('exportMask').hidden = true;
+}
+
+/** 强制收起生成弹窗：生成已经结束，不再受「生成中不给关」那条限制 */
+function hideExport() {
+  exportBusy = false;
+  $('exportMask').hidden = true;
+}
+
+/* -------------------------------------------------------- 生成前预览 */
+
+let previewUrl = null;
+let previewDownload = null; // 用户确认后要执行的那一次下载
+
+/**
+ * 生成完先给预览，用户确认无误才真正下载。
+ *
+ * 预览用浏览器自带的 PDF 阅读器（blob URL 塞进 iframe）：不引额外依赖，
+ * 显示的就是真实成品，滚动和缩放都交给它。个别浏览器不渲染 iframe 里的 PDF，
+ * 所以旁边留了一条「直接下载」的退路。
+ */
+function showPreview(bytes, filename) {
+  hideExport();
+  releasePreview();
+  previewUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  previewDownload = () => download(bytes, filename);
+  const open = $('previewOpen');
+  open.href = previewUrl;
+  open.setAttribute('download', filename);
+  $('previewFrame').src = previewUrl;
+  $('previewMask').hidden = false;
+  $('previewConfirm').focus();
+}
+
+/** 断开 iframe 并释放 blob，别让阅读器一直占着那份数据 */
+function releasePreview() {
+  $('previewFrame').removeAttribute('src');
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+}
+
+/** 返回修改：关掉预览回表单，内容还在，改完可以再生成 */
+function closePreview() {
+  if ($('previewMask').hidden) return;
+  $('previewMask').hidden = true;
+  releasePreview();
+  previewDownload = null;
+}
+
+/** 确认无误：这才真正下载 */
+function confirmPreview() {
+  const run = previewDownload;
+  closePreview();
+  if (!run) return;
+  run();
+  showExport('已生成并开始下载，请检查内容后打印。', 'done');
+}
+
+/** 下载生成 PDF 用的两份字体（只下一次，之后走浏览器缓存） */
 function loadAssets() {
   if (!assetsPromise) {
     assetsPromise = Promise.all(
@@ -75,64 +144,110 @@ const PHONE_RE = /^[\d\-+() ]{7,20}$/;
 const SCHOOL_USER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/;
 
 /**
- * 校验规则集中在这里，返回 [{ el, message }]。
- * el 是要标红高亮的元素（单选组用 .options 容器）。
- * 提交时的报错文字和右上角的 ✓/✕ 指示都用它，避免两处规则不一致。
+ * 表单一共 9 项：学号、姓名、学生类别、学院、专业、手机、电邮、请假时间、请假原因。
+ * 后面两项允许先空着（打印出来的表格上也能由学院或学生手写），其余必须填好才能生成。
+ */
+const TOTAL_ITEMS = 9;
+const OPTIONAL_ITEMS = { period: '请假时间', reason: '请假原因' };
+
+/**
+ * 校验规则集中在这里。每条都带：
+ *   el   要标红高亮的元素（单选组用 .options 容器）
+ *   item 属于哪一项，用来算填写进度
+ * 报错文字和右侧提示条都读它，避免几处规则各写一套。
+ *
+ * 这里只收「填错了」的情况，所以每一条都会拦住生成。
+ * 「整项没填」不算错误（可留空的项本来就允许空着），由 optionalGaps() 单独统计。
  */
 function collectErrors() {
   const errors = [];
-  const add = (el, message) => errors.push({ el, message });
+  const add = (el, message, item) => errors.push({ el, message, item });
 
   const studentId = $('studentId').value.trim();
-  if (!studentId) add($('studentId'), '请填写学号');
-  else if (!/^\d{10}$/.test(studentId)) add($('studentId'), '学号应为 10 位数字');
+  if (!studentId) add($('studentId'), '请填写学号', 'studentId');
+  else if (!/^\d{10}$/.test(studentId)) add($('studentId'), '学号应为 10 位数字', 'studentId');
 
-  if (!$('name').value.trim()) add($('name'), '请填写姓名');
+  if (!$('name').value.trim()) add($('name'), '请填写姓名', 'name');
 
   if (!form.querySelector('input[name="category"]:checked')) {
-    add($('categoryOptions'), '请选择学生类别（内招生 / 外招生）');
+    add($('categoryOptions'), '请选择学生类别', 'category');
   }
 
-  if (!readCollege()) add($('collegeTrigger'), '请选择学院');
+  if (!readCollege()) add($('collegeTrigger'), '请选择学院', 'college');
 
-  if (!$('major').value.trim()) add($('major'), '请填写专业');
+  if (!$('major').value.trim()) add($('major'), '请填写专业', 'major');
 
   const phone = $('phone').value.trim();
-  if (!phone) add($('phone'), '请填写手机号');
-  else if (!PHONE_RE.test(phone)) add($('phone'), '手机号格式不正确');
+  if (!phone) add($('phone'), '请填写手机号', 'phone');
+  else if (!PHONE_RE.test(phone)) add($('phone'), '手机号格式不正确', 'phone');
 
   if (emailMode() === 'personal') {
     const email = $('email').value.trim();
-    if (!email) add($('email'), '请填写电邮地址');
-    else if (!EMAIL_RE.test(email)) add($('email'), '电邮格式不正确');
+    if (!email) add($('email'), '请填写电邮地址', 'email');
+    else if (!EMAIL_RE.test(email)) add($('email'), '电邮格式不正确', 'email');
   } else {
     const user = $('emailUser').value.trim();
-    if (!studentYear()) add($('studentId'), '学号前 4 位用于生成学子邮地址，请填写完整');
-    if (!user) add($('emailUser'), '请填写学子邮用户名');
-    else if (!SCHOOL_USER_RE.test(user)) add($('emailUser'), '学子邮用户名格式不正确');
+    if (!studentYear()) add($('studentId'), '学号前 4 位用于生成学子邮地址，请填写完整', 'email');
+    if (!user) add($('emailUser'), '请填写学子邮用户名', 'email');
+    else if (!SCHOOL_USER_RE.test(user)) add($('emailUser'), '学子邮用户名格式不正确', 'email');
   }
 
+  // 请假时间要么整项留空，要么填对：只填一半或填反都拦住生成，
+  // 免得用户以为自己填了，PDF 里却整行空白
   const startDate = $('startDate').value;
   const endDate = $('endDate').value;
-  if (!startDate) add($('startDate'), '请选择开始日期');
-  if (!endDate) add($('endDate'), '请选择结束日期');
+  if (startDate && !endDate) add($('endDate'), '请选择结束日期', 'period');
+  if (!startDate && endDate) add($('startDate'), '请选择开始日期', 'period');
   if (startDate && endDate && daysBetween(startDate, endDate) < 1) {
-    add($('startDate'), '开始日期晚于结束日期');
-    add($('endDate'), '结束日期早于开始日期');
+    add($('startDate'), '开始日期晚于结束日期', 'period');
+    add($('endDate'), '结束日期早于开始日期', 'period');
   }
 
-  if (!form.querySelector('input[name="reasonType"]:checked')) {
-    add($('reasonOptions'), '请选择请假原因类型');
-  }
+  // 请假原因整项不选不算错误（见 optionalGaps），所以这里不产生条目
 
   const unsupported = unsupportedChars(
     $('name').value.trim() + readCollege() + $('major').value.trim(),
   );
   if (unsupported.length) {
-    add($('major'), `这些字不在字体范围内，请替换：${unsupported.join(' ')}`);
+    add($('major'), `这些字不在字体范围内，请替换：${unsupported.join(' ')}`, 'major');
   }
 
   return errors;
+}
+
+/**
+ * 可以留空的两项各自填了没有。
+ * 请假时间填一半也算没填 —— PDF 里那一行会整行留白，进度也按没填算。
+ * 这两项没填不是「错误」，所以不放进 collectErrors，只影响进度和提示条的状态。
+ */
+function optionalGaps() {
+  const start = $('startDate').value;
+  const end = $('endDate').value;
+  const gaps = [];
+  if (!(start && end && daysBetween(start, end) >= 1)) gaps.push('period');
+  if (!form.querySelector('input[name="reasonType"]:checked')) gaps.push('reason');
+  return gaps;
+}
+
+/**
+ * 当前填写状态。
+ *   level 'ok'   全填好了
+ *         'warn' 只差请假时间和/或请假原因 —— 仍然可以生成
+ *         'bad'  还有必填项没填 —— 不能生成
+ */
+function formState() {
+  const errors = collectErrors();
+  const gaps = optionalGaps();
+  const missing = new Set([...errors.map((e) => e.item), ...gaps]);
+
+  return {
+    errors,
+    filled: TOTAL_ITEMS - missing.size,
+    total: TOTAL_ITEMS,
+    missingRequired: new Set(errors.map((e) => e.item)).size,
+    missingOptional: gaps.map((key) => OPTIONAL_ITEMS[key]),
+    level: errors.length ? 'bad' : (gaps.length ? 'warn' : 'ok'),
+  };
 }
 
 /** 用过的字段才标红，避免一打开就满屏红 */
@@ -140,36 +255,64 @@ const touched = new Set();
 let submitted = false;
 const isTouched = (el) => touched.has(el) || touched.has(el.closest?.('.field'));
 
-function refreshValidity() {
-  const errors = collectErrors();
-  const bad = new Set(errors.map((e) => e.el));
+/* 三种状态各自的符号：全部填好 / 只差可留空的两项 / 还有必填没填 */
+const BADGE_MARKS = { ok: '✓', warn: '!', bad: '✕' };
 
+/** 把右侧提示条画成某个状态。进度条不归它管，只跟填写进度走。 */
+function renderBadge(level, text, note) {
+  const badge = $('validity');
+  badge.classList.toggle('ok', level === 'ok');
+  badge.classList.toggle('warn', level === 'warn');
+  badge.classList.toggle('bad', level === 'bad');
+  $('validityMark').textContent = BADGE_MARKS[level];
+  $('validityText').textContent = text;
+  $('validityNote').textContent = note;
+}
+
+/** 填写进度条：已完成项 / 总项数 */
+function renderMeter(filled, total) {
+  $('validityBar').style.width = `${Math.round((filled / total) * 100)}%`;
+  $('validityCount').textContent = `${filled} / ${total}`;
+}
+
+function refreshValidity() {
+  const state = formState();
+  const { errors, filled, total, level, missingRequired, missingOptional } = state;
+
+  const badEls = new Set(errors.map((e) => e.el));
   document.querySelectorAll('.invalid').forEach((el) => el.classList.remove('invalid'));
-  for (const el of bad) {
+  for (const el of badEls) {
     if (submitted || isTouched(el)) el.classList.add('invalid');
   }
 
-  const ok = errors.length === 0;
-  const badge = $('validity');
-  badge.classList.toggle('ok', ok);
-  badge.classList.toggle('bad', !ok);
-  $('validityMark').textContent = ok ? '✓' : '✕';
-  $('validityText').textContent = ok ? '填写完整' : errors[0].message;
-  $('validityNote').textContent = ok
-    ? '可以生成 PDF'
-    : `${errors.length} 项待完善`;
-  return errors;
+  if (level === 'ok') {
+    renderBadge('ok', '填写完整', '可以生成 PDF');
+  } else if (level === 'warn') {
+    renderBadge('warn', `${missingOptional.join('、')}未填`, '留空也能生成');
+  } else {
+    renderBadge('bad', errors[0].message, `还差 ${missingRequired} 项必填`);
+  }
+  renderMeter(filled, total);
+  return state;
 }
 
 function readForm() {
   submitted = true;
-  const errors = refreshValidity();
-  if (errors.length) {
-    const { el, message } = errors[0];
+  const state = refreshValidity();
+  // 任何一条校验错误都拦住生成。整项留空的请假时间与请假原因不算错误 ——
+  // 那两项允许空着，PDF 里对应整行留白。
+  if (state.errors.length) {
+    const { el, message } = state.errors[0];
     el.scrollIntoView?.({ block: 'center' });
     el.focus?.();
     throw new Error(message);
   }
+
+  // 请假时间只填了一半或填反了都不写进 PDF，免得画出错位的日期
+  const startDate = $('startDate').value;
+  const endDate = $('endDate').value;
+  const days = startDate && endDate ? daysBetween(startDate, endDate) : 0;
+  const hasPeriod = days > 0;
 
   return {
     studentId: $('studentId').value.trim(),
@@ -179,10 +322,10 @@ function readForm() {
     major: $('major').value.trim(),
     phone: $('phone').value.trim(),
     email: readEmail(),
-    startDate: $('startDate').value,
-    endDate: $('endDate').value,
-    days: daysBetween($('startDate').value, $('endDate').value),
-    reasonType: form.querySelector('input[name="reasonType"]:checked').value,
+    startDate: hasPeriod ? startDate : '',
+    endDate: hasPeriod ? endDate : '',
+    days,
+    reasonType: form.querySelector('input[name="reasonType"]:checked')?.value ?? '',
     fillAttachment: $('fillAttachment').checked,
   };
 }
@@ -190,8 +333,11 @@ function readForm() {
 /* ------------------------------------------------------- 面板展开（初次进入） */
 
 /**
- * 初始状态面板只占下方一部分，露出背景；用户向上滑动一点点，
- * 面板就自动铺满整屏，之后所有滚动都在面板内部完成。
+ * 初始状态面板只占下方一部分，露出背景；点按钮后铺满整屏，
+ * 之后所有滚动都在面板内部完成。
+ *
+ * 展开是单向的：收回初始状态只有「再点一次按钮」这一种入口，所以没有做。
+ * 滑动、方向上键都不再能把它收回去。
  */
 const pageEl = $('page');
 let expanded = false;
@@ -213,66 +359,11 @@ function expandPage() {
   if (expanded) return;
   expanded = true;
   pageEl.classList.add('expanded');
-  // 展开后滚到标题处：校徽与“向上滑动”提示滑出视野，标题顶在最上面
-  const title = pageEl.querySelector('.site-header h1');
-  if (title) {
-    const offset = title.getBoundingClientRect().top - pageEl.getBoundingClientRect().top + pageEl.scrollTop;
-    pageEl.scrollTop = Math.max(0, offset - 12);
-  }
-}
-
-function collapsePage() {
-  if (!expanded) return;
-  expanded = false;
-  pageEl.classList.remove('expanded');
+  // 展开提示按钮到这一步就收起来了（见 style.css），顶部从校徽开始
   pageEl.scrollTop = 0;
-  if (footerShown) {
-    footerShown = false;
-    footerEl.classList.remove('show');
-    pageEl.style.setProperty('--footer-h', '0px');
-  }
-  layoutCollapsed();
 }
-
-const footerEl = document.querySelector('.site-footer');
-let footerShown = false;
-
-/**
- * 底栏只在内容滑到最底部时从屏幕下方升上来。
- * 因为底栏出现会把卡片顶高一点，用两个阈值（出现/收起）避免来回抖动。
- */
-function updateFooter() {
-  const remaining = pageEl.scrollHeight - pageEl.scrollTop - pageEl.clientHeight;
-  if (!footerShown && remaining <= 8) {
-    footerShown = true;
-    footerEl.classList.add('show');
-    pageEl.style.setProperty('--footer-h', `${footerEl.offsetHeight}px`);
-  } else if (footerShown && remaining > footerEl.offsetHeight + 24) {
-    footerShown = false;
-    footerEl.classList.remove('show');
-    pageEl.style.setProperty('--footer-h', '0px');
-  }
-}
-
-pageEl.addEventListener('scroll', updateFooter, { passive: true });
 
 $('expandBtn').addEventListener('click', expandPage);
-
-// 收起状态禁止滚动内容（只能点按钮展开）；展开后向上滑到顶可收回
-pageEl.addEventListener('wheel', (e) => {
-  if (expanded && e.deltaY < 0 && pageEl.scrollTop <= 0) collapsePage();
-}, { passive: true });
-
-let touchStartY = 0;
-pageEl.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
-pageEl.addEventListener('touchmove', (e) => {
-  const up = touchStartY - e.touches[0].clientY; // > 0 表示手指上滑
-  if (expanded && up < -10 && pageEl.scrollTop <= 0) collapsePage();
-}, { passive: true });
-
-document.addEventListener('keydown', (e) => {
-  if (expanded && e.key === 'ArrowUp' && pageEl.scrollTop <= 0) collapsePage();
-});
 
 /* ------------------------------------------------------------------ 学院选择 */
 
@@ -402,7 +493,6 @@ function daysBetween(start, end) {
 
 /** 找出中文字体里没有的字符，避免生成出缺字的 PDF */
 function unsupportedChars(text) {
-  if (!cjkCharset) return [];
   const missing = new Set();
   for (const ch of text) {
     const cp = ch.codePointAt(0);
@@ -412,12 +502,36 @@ function unsupportedChars(text) {
   return [...missing];
 }
 
+/**
+ * 可以取消选择的单选组（标了 data-clearable 的）：再点一次已经选中那一项就清空。
+ * 只标在允许留空的组上 —— 必填的组清空没有意义，而且像邮箱方式那种地方，
+ * 代码本来就假定一定有一项被选中。
+ */
+function enableDeselect() {
+  for (const group of form.querySelectorAll('.options[data-clearable]')) {
+    // click 事件里 checked 已经变成 true 了，分不清「刚选中」和「本来就选中」，
+    // 所以自己记着本组当前选的是哪个
+    let current = group.querySelector('input:checked')?.value ?? null;
+
+    for (const input of group.querySelectorAll('input[type="radio"]')) {
+      input.addEventListener('change', () => {
+        current = group.querySelector('input:checked')?.value ?? null;
+      });
+      input.addEventListener('click', () => {
+        if (current !== input.value) return; // 这一下是正常选中，交给 change 去记
+        input.checked = false;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+  }
+}
+
 function updateDays() {
   const start = $('startDate').value;
   const end = $('endDate').value;
   const hint = $('daysHint');
   if (!start || !end) {
-    hint.textContent = '选择起止日期后自动计算请假天数';
+    hint.textContent = '填了会自动算出天数';
     return;
   }
   const days = daysBetween(start, end);
@@ -441,19 +555,28 @@ function download(bytes, filename) {
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
+
+  // 校验不过就停在原地：高亮字段、右侧提示条给出状态，不弹窗 ——
+  // 这时该看的是表单，不是对话框
+  let data;
+  try {
+    data = readForm();
+  } catch (err) {
+    return;
+  }
+
   submitBtn.disabled = true;
   try {
-    const data = readForm();
-    setStatus('正在准备模板与字体…');
+    showExport('正在准备模板与字体…');
     const assets = { templateBytes: decodeBase64(TEMPLATE_PDF_BASE64), ...(await loadAssets()) };
-    setStatus('正在生成 PDF…');
-    // 让浏览器先把上面的状态渲染出来，再做耗时的字体子集化
+    showExport('正在生成 PDF…');
+    // 让浏览器先把上面的弹窗渲染出来，再做耗时的字体子集化
     await new Promise((resolve) => setTimeout(resolve, 30));
     const bytes = await buildLeavePdf({ ...assets, data });
-    download(bytes, `${data.studentId}_${data.name}_请假申请表.pdf`);
-    setStatus('已生成并开始下载，请检查内容后打印。', 'done');
+    // 不直接下载：先给预览，用户点「确认无误」才真的下载（见 showPreview）
+    showPreview(bytes, `${data.studentId}_${data.name}_请假申请表.pdf`);
   } catch (err) {
-    setStatus(err.message || String(err), 'error');
+    showExport(err.message || String(err), 'error');
   } finally {
     submitBtn.disabled = false;
   }
@@ -490,14 +613,17 @@ document.addEventListener('keydown', (event) => {
 form.querySelectorAll('input[name="emailMode"]').forEach((el) => {
   el.addEventListener('change', updateEmailUi);
 });
+enableDeselect();
 
-// 提前把字体读进内存，点“生成”时就不用等
-loadAssets()
-  .then((assets) => {
-    cjkCharset = new Set(fontkit.create(assets.cjkFontBytes).characterSet);
-    setStatus('准备就绪，填好信息即可生成。');
-  })
-  .catch(() => setStatus('资源加载失败，请确认通过 http(s) 访问本页面。', 'error'));
+$('exportClose').addEventListener('click', closeExport);
+$('previewBack').addEventListener('click', closePreview);
+$('previewConfirm').addEventListener('click', confirmPreview);
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (!$('previewMask').hidden) closePreview();   // 预览里按 Esc = 返回修改
+  else if (!$('exportMask').hidden) closeExport();
+});
+
 updateDays();
 updateEmailUi();
 updateCollegeUi();

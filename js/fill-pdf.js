@@ -153,10 +153,17 @@ export async function buildLeavePdf({ templateBytes, latinFontBytes, cjkFontByte
 
   const page1 = pdf.getPage(0);
   const page2 = pdf.getPage(1);
-  const [sy, sm, sd] = data.startDate.split('-');
-  const [ey, em, ed] = data.endDate.split('-');
-  const start = [sy, String(Number(sm)), String(Number(sd))];
-  const end = [ey, String(Number(em)), String(Number(ed))];
+
+  // 请假时间与请假原因允许留空：纸质表格上这两处也能由学院或学生手写。
+  // 所以有就画、没有就整行留白 —— 别让空串走进 split/Number 画出错位的字。
+  const hasPeriod = Boolean(data.startDate && data.endDate);
+  const cutDate = (iso) => {
+    const [y, m, d] = iso.split('-');
+    return [y, String(Number(m)), String(Number(d))]; // 去掉月和日的前导零
+  };
+  const period = hasPeriod
+    ? { start: cutDate(data.startDate), end: cutDate(data.endDate), days: String(data.days) }
+    : null;
 
   /* ---------- 第 1 页：申请人填写部分 ---------- */
   drawStudentId(page1, fonts, data.studentId);
@@ -170,8 +177,9 @@ export async function buildLeavePdf({ templateBytes, latinFontBytes, cjkFontByte
   drawSlot(page1, fonts, data.phone, P1X.phone, P1.contactRow);
   drawSlot(page1, fonts, data.email, P1X.email, P1.contactRow);
 
-  drawPeriod(page1, fonts, P1X, { start, end, days: String(data.days) }, P1.periodRow);
+  if (period) drawPeriod(page1, fonts, P1X, period, P1.periodRow);
 
+  // 没选原因就一个勾都不打，整行留白
   if (data.reasonType === 'health') drawTick(page1, fonts, BOX.reasonHealth, P1.reasonTypeRow);
   else if (data.reasonType === 'other') drawTick(page1, fonts, BOX.reasonOther, P1.reasonTypeRow);
   // 原因下面的具体情况说明横线留空，由学生打印后手写
@@ -179,12 +187,11 @@ export async function buildLeavePdf({ templateBytes, latinFontBytes, cjkFontByte
   /* ---------- 第 2 页：附件准假条存根（可选） ---------- */
   if (data.fillAttachment) {
     for (const rows of P2) {
-      const period = { start, end, days: String(data.days) };
       drawSlot(page2, fonts, data.college, P2X.college, rows.collegeRow);
       drawSlot(page2, fonts, data.major, P2X.major, rows.collegeRow);
       drawSlot(page2, fonts, data.name, P2X.name, rows.studentRow);
       drawSlot(page2, fonts, data.studentId, P2X.studentId, rows.studentRow);
-      drawPeriod(page2, fonts, P2X, period, rows.periodRow, rows.studentRow);
+      if (period) drawPeriod(page2, fonts, P2X, period, rows.periodRow, rows.studentRow);
     }
   }
 

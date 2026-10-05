@@ -1,13 +1,55 @@
+/*
+ * 页面显示字体：思源黑体（Noto Sans CJK SC），由 tools/prepare-fonts.py 裁到
+ * GB2312 全集（7547 字）。Regular 与 Bold 都是真实字重，加粗不靠浏览器合成。
+ *
+ * 用 @font-face 而不是等 JS 去注册，是为了让浏览器在解析 CSS 时就开始下载，
+ * 标题和正文能早一点换过来、少闪一下系统字体。
+ * 生成 PDF 用的宋体不在这里 —— 那份字体只在点「生成」时才由 app.js 取。
+ */
+@font-face {
+  font-family: "JNU Sans";
+  src: url("assets/fonts/noto-sans-sc-subset.otf?v=20261005a") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JNU Sans";
+  src: url("assets/fonts/noto-sans-sc-bold-subset.otf?v=20261005a") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --red: #9b1b30;          /* 暨南大学校徽红 */
-  --red-dark: #7d1526;
-  --ink: #1f2328;
-  --muted: #6b7280;
-  --line: #e2e5ea;
-  --bg: #f6f7f9;
+  /*
+   * 主色取校徽青。它只出现在「能操作、有状态」的地方：按钮、选中项、焦点、
+   * ✓/✕ 里的 ✓、区块标题。不做装饰性铺色。
+   */
+  --jnu: #007d90;
+  --jnu-deep: #00616f;                    /* 悬停 / 按下；白字对比度 7.2:1 */
+  --jnu-wash: #eef6f7;                    /* 选中项的极浅底 */
+  --jnu-ring: rgba(0, 125, 144, .18);     /* 输入框聚焦光晕 */
+
+  --ink: #1c2024;
+  --muted: #66707a;
+  --line: #e3e7ea;
+  --line-soft: #eef0f3;
+  --bg: #f5f7f8;
+
+  /* 状态色都压得比较柔：提示条要看得见，但不该是刺眼的告警 */
+  --danger: #b3564d;                    /* 还有必填项没填 */
+  --danger-ring: rgba(179, 86, 77, .16);
+  --danger-wash: #faeae8;
+  --warn: #8f6410;                      /* 只差请假时间 / 请假原因这两项可留空的 */
+  --warn-wash: #fbf1dc;
+
+  /* 思源黑体在本机没装时，退回系统里的中文黑体；系统宋体不参与 */
+  --sans: "JNU Sans", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Source Han Sans SC", sans-serif;
+
   --radius: 10px;
   --page-gap: 14px;   /* 卡片与网页上下边缘的距离 */
-  --footer-h: 0px;    /* 底栏占的高度，滑到最底时由 JS 设为实际高度 */
 }
 
 * { box-sizing: border-box; }
@@ -21,16 +63,16 @@ body {
   height: 100vh;
   overflow: hidden; /* 页面本身不滚动，滚动交给填写面板 */
   color: var(--ink);
-  font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Source Han Sans SC", sans-serif;
+  font-family: var(--sans);
   font-size: 15px;
   line-height: 1.6;
-  /* 校园全景：初始露出一截，重点让牌坊落在可见区域 */
+  /* 校园牌坊：初始露出一截，重点让「暨南大学」那几个字落在可见区域 */
   background: var(--bg) url("assets/background.jpg?v=20261003b") center center / cover no-repeat;
 }
 
 /*
  * 主体：白色、完全不透明、圆角面板。
- * 初始只占下方 70%，向上滑一下后 top 归零、铺满整屏；之后滚动都在面板内部。
+ * 初始只占下方一段，向上滑一下后 top 归零、铺满整屏；之后滚动都在面板内部。
  */
 /* 卡片所在的区域：占据底栏以上的全部空间，背景图铺在这里 */
 .stage {
@@ -44,17 +86,21 @@ body {
   position: absolute;
   left: 50%;
   top: var(--collapsed-top, 50%);
-  bottom: calc(var(--page-gap) + var(--footer-h));
+  bottom: var(--page-gap);
   width: 100%;
   max-width: 760px;
-  padding: 10px 30px 24px;
+  /* 底部不留内边距：留白改由 .notes 的下外边距承担，
+     这样吸底按钮的白色底衬才能一直铺到卡片下沿，中途不会漏出内容 */
+  padding: 10px 30px 0;
   transform: translateX(-50%);
   background: #fff;
   border-radius: 18px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, .26);
+  box-shadow: 0 18px 48px rgba(20, 40, 44, .22), 0 2px 8px rgba(20, 40, 44, .08);
   overflow-y: auto;
   overscroll-behavior: contain;
-  transition: top .42s cubic-bezier(.22, .61, .36, 1), bottom .3s ease;
+  /* 只给展开/收回做过渡。bottom 不加过渡：底栏是瞬间出现/消失的，
+     卡片底边要是慢慢缩，两者就对不上了。 */
+  transition: top .42s cubic-bezier(.22, .61, .36, 1);
 }
 
 .page.expanded { top: var(--page-gap); }
@@ -82,45 +128,59 @@ body {
 
 /* 这行文字在照片背景上，给个白色胶囊底才看得清 */
 .page-hint button {
-  padding: 5px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 15px;
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, .92);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 2px 12px rgba(20, 40, 44, .2);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--jnu-deep);
   cursor: pointer;
 }
 
 .page-hint button:hover { background: #fff; }
 
-.page-hint .chev { display: inline-block; margin-left: 2px; }
-
-
-/* 校徽：居中在展开提示与标题之间 */
-
-
-/* 校徽：宽度与“向上滑动或点这里，展开填写”那行文字一致（实测 172px） */
-.emblem {
-  display: block;
-  margin: 8px auto 12px;
-  width: 172px;
-  height: 172px;
+.page-hint .chev {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
+/*
+ * 展开之后就没这个按钮的事了 —— 面板不会再收回初始状态，
+ * 收起来后顶部正好从校徽开始。
+ */
+.page.expanded .page-hint { display: none; }
+
+/* 校徽：页头的主角，居中在展开提示与标题之间 */
+.emblem {
+  display: block;
+  margin: 10px auto 14px;
+  width: 152px;
+  height: 152px;
+}
+
+/* 文档抬头：校徽 → 宋体标题 → 说明，下压一条细线，与表单各区块的细线呼应 */
 .site-header {
-  padding: 26px 0 18px;
+  padding: 24px 0 18px;
   border-bottom: 1px solid var(--line);
 }
 
 .site-header h1 {
   margin: 0;
   font-size: 24px;
-  letter-spacing: .5px;
-  border-left: 4px solid var(--red);
-  padding-left: 12px;
+  font-weight: 700;      /* 黑体子集带真正的 Bold，不靠浏览器合成 */
+  line-height: 1.4;
+  letter-spacing: .01em;
 }
 
 .subtitle {
@@ -134,7 +194,7 @@ main { margin: 0; padding-top: 22px; }
 /* 白色卡片已经是整块，内部分区只用细分隔线区分 */
 .card {
   border: none;
-  border-top: 1px solid #eef0f3;
+  border-top: 1px solid var(--line-soft);
   border-radius: 0;
   padding: 18px 0 0;
   margin: 0 0 22px;
@@ -147,7 +207,15 @@ main { margin: 0; padding-top: 22px; }
   margin-bottom: 12px;
   font-weight: 600;
   font-size: 15px;
-  color: var(--red);
+  color: var(--jnu);
+}
+
+/* 区块标题后面的「可留空」：说明这一节不是必须填的 */
+.optional {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
 }
 
 /* scroll-margin：聚焦/滚动到某个字段时，别被吸底的“生成”按钮压住 */
@@ -171,7 +239,7 @@ main { margin: 0; padding-top: 22px; }
 .field > .label {
   display: block;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
@@ -184,8 +252,8 @@ select,
 textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #ced3da;
-  border-radius: 8px;
+  border: 1px solid #d3d9de;
+  border-radius: 9px;
   font: inherit;
   color: inherit;
   background: #fff;
@@ -193,6 +261,8 @@ textarea {
 }
 
 textarea { resize: vertical; }
+
+input::placeholder { color: #9aa1ab; }
 
 /* ------------------------------------------------------ 学院选择（弹出式面板） */
 
@@ -203,8 +273,8 @@ textarea { resize: vertical; }
   gap: 8px;
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #ced3da;
-  border-radius: 8px;
+  border: 1px solid #d3d9de;
+  border-radius: 9px;
   background: #fff;
   font: inherit;
   color: inherit;
@@ -217,8 +287,8 @@ textarea { resize: vertical; }
 
 .picker-trigger:focus-visible {
   outline: none;
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(155, 27, 48, .12);
+  border-color: var(--jnu);
+  box-shadow: 0 0 0 3px var(--jnu-ring);
 }
 
 .picker-trigger .placeholder { color: #9aa1ab; }
@@ -243,18 +313,61 @@ textarea { resize: vertical; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  width: 93px; /* 比符号（57px）宽约 35px */
-  padding: 9px 8px 11px;
+  gap: 4px;
+  width: 93px;
+  padding: 10px 9px 12px;
   background: #fff;
   border-radius: 12px 0 0 12px;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, .16);
+  box-shadow: 0 6px 22px rgba(20, 40, 44, .14);
   text-align: center;
   pointer-events: none; /* 只是提示，不挡点击 */
 }
 
-.validity-text {
+/*
+ * 状态符号：浅底 + 同色字，比一块实心饱和圆柔和得多。
+ * 三种状态各有自己的颜色，见下面的 ok / warn / bad。
+ */
+.validity-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background-color .25s, color .25s;
+}
+
+/* 填写进度条。条本身固定用主色：它表示「填了多少」，
+   不该因为还没填完就变成红色去吓人 —— 状态由上面的符号表达。 */
+.validity-meter {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #eceef1;
+  overflow: hidden;
+}
+
+.validity-meter i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--jnu);
+  transition: width .25s ease;
+}
+
+.validity-count {
   margin: 0;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: #9aa1ab;
+  font-variant-numeric: tabular-nums;
+}
+
+.validity-text {
+  margin: 2px 0 0;
   font-size: 11.5px;
   line-height: 1.35;
   color: var(--muted);
@@ -262,29 +375,22 @@ textarea { resize: vertical; }
 
 .validity-note {
   margin: 0;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.35;
   color: #9aa1ab;
 }
 
-/* 大小与“共 x 项待完善”那行文字相当（实测 71–78px） */
-.validity-mark {
-  display: grid;
-  place-items: center;
-  width: 57px;
-  height: 57px;
-  margin-bottom: 6px;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1;
-  transition: background-color .25s;
-}
+/* 全部填好 */
+.validity.ok .validity-mark { background: var(--jnu-wash); color: var(--jnu); }
+.validity.ok .validity-text { color: var(--jnu-deep); }
 
-.validity.ok .validity-mark { background: #1f9d55; }
-.validity.bad .validity-mark { background: #d64545; }
-.validity.ok .validity-text { color: #1c7c54; }
+/* 只差请假时间 / 请假原因 —— 仍然可以生成 */
+.validity.warn .validity-mark { background: var(--warn-wash); color: var(--warn); }
+.validity.warn .validity-text { color: var(--warn); }
+
+/* 还有必填项没填 */
+.validity.bad .validity-mark { background: var(--danger-wash); color: var(--danger); }
+.validity.bad .validity-text { color: var(--danger); }
 
 /* 左侧留白够放下提示条（760 卡片 + 两侧 250）才浮在右侧空白里，否则退到右上角 */
 @media (min-width: 1280px) {
@@ -296,13 +402,13 @@ textarea { resize: vertical; }
   .validity {
     top: 10px;
     right: 0;
-    width: 89px;
-    padding: 8px 7px 10px;
+    width: 86px;
+    padding: 9px 8px 11px;
   }
 
-  .validity-mark { width: 53px; height: 53px; font-size: 26px; }
-  .validity-text { font-size: 11.5px; line-height: 1.4; }
-  .validity-note { font-size: 11px; }
+  .validity-mark { width: 34px; height: 34px; font-size: 18px; }
+  .validity-text { font-size: 11px; line-height: 1.4; }
+  .validity-note { font-size: 10.5px; }
 
 }
 
@@ -313,7 +419,7 @@ textarea { resize: vertical; }
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(0, 0, 0, .45);
+  background: rgba(16, 30, 34, .5);
 }
 
 /* 作者样式里的 display 会盖掉浏览器默认的 [hidden]，这里显式关掉 */
@@ -351,7 +457,11 @@ textarea { resize: vertical; }
   padding: 8px 0 14px;
 }
 
-.sheet-head h2 { margin: 0; font-size: 20px; }
+.sheet-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
 
 .sheet-close {
   display: grid;
@@ -387,8 +497,8 @@ textarea { resize: vertical; }
 }
 
 .sheet-search:focus-within {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(155, 27, 48, .12);
+  border-color: var(--jnu);
+  box-shadow: 0 0 0 3px var(--jnu-ring);
 }
 
 .sheet-search svg {
@@ -429,7 +539,12 @@ textarea { resize: vertical; }
 .sheet-list li:hover,
 .sheet-list li.active { background: #f4f5f7; }
 
-.sheet-list li[aria-selected="true"] { color: var(--red); font-weight: 600; }
+/* 已选中的学院：主色 + 极浅底，扫一眼就知道当前选的是哪个 */
+.sheet-list li[aria-selected="true"] {
+  color: var(--jnu);
+  background: var(--jnu-wash);
+  font-weight: 600;
+}
 
 .sheet-empty {
   padding: 20px 8px;
@@ -463,15 +578,16 @@ textarea { resize: vertical; }
   white-space: nowrap;
 }
 
+/* 跟着学号自动生成的那一段年份，让它显眼一点 */
 .email-suffix span {
-  color: var(--red);
+  color: var(--jnu);
   font-weight: 600;
 }
 
 input:focus, textarea:focus {
   outline: none;
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(155, 27, 48, .12);
+  border-color: var(--jnu);
+  box-shadow: 0 0 0 3px var(--jnu-ring);
 }
 
 /* 填写有误的字段：红框高亮（由 JS 加 .invalid） */
@@ -479,12 +595,12 @@ input.invalid,
 select.invalid,
 textarea.invalid,
 .picker-trigger.invalid {
-  border-color: #d64545;
-  box-shadow: 0 0 0 3px rgba(214, 69, 69, .14);
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-ring);
 }
 
-.options.invalid .option { border-color: #d64545; }
-.options.invalid .option:has(input:checked) { background: rgba(214, 69, 69, .06); }
+.options.invalid .option { border-color: var(--danger); }
+.options.invalid .option:has(input:checked) { background: var(--danger-wash); }
 
 .options { display: flex; flex-wrap: wrap; gap: 10px; }
 
@@ -493,8 +609,8 @@ textarea.invalid,
   align-items: center;
   gap: 11px; /* 圆点与文字之间的间距 */
   padding: 9px 14px;
-  border: 1px solid #ced3da;
-  border-radius: 8px;
+  border: 1px solid #d3d9de;
+  border-radius: 9px;
   cursor: pointer;
   font-weight: 400;
   background: #fff;
@@ -504,14 +620,14 @@ textarea.invalid,
 .option:hover { border-color: #a9b0ba; }
 
 .option:has(input:checked) {
-  border-color: var(--red);
-  background: rgba(155, 27, 48, .06);
+  border-color: var(--jnu);
+  background: var(--jnu-wash);
   font-weight: 600;
 }
 
-.option:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(155, 27, 48, .15); }
+.option:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--jnu-ring); }
 
-.option input { accent-color: var(--red); margin: 0; }
+.option input { accent-color: var(--jnu); margin: 0; }
 
 .option.checkbox {
   align-items: flex-start;
@@ -531,79 +647,233 @@ textarea.invalid,
   color: var(--muted);
 }
 
-.legend-hint { margin: -4px 0 14px; }
-
-/* 只留按钮本身，外框全透明 */
+/*
+ * 吸底按钮：按钮本身没有外框，但下面要垫一层白。
+ * 否则内容滑到按钮底下时会被从字中间切断，看着像渲染错误；
+ * 上方留一段渐隐，让内容是「淡出」而不是「被切掉」。
+ */
 .actions {
   position: sticky;
   bottom: 0;
   margin-top: 4px;
-  padding: 14px 0 22px;
-  background: none;
+  padding: 14px 0 24px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0, #fff 16px, #fff 100%);
 }
 
 button[type="submit"] {
   width: 100%;
-  padding: 14px;
+  padding: 15px;
   border: none;
-  border-radius: 8px;
-  background: var(--red);
+  border-radius: 10px;
+  background: var(--jnu);
   color: #fff;
   font: inherit;
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: 1px;
+  letter-spacing: .06em;   /* 中文字距稍放开，按钮更沉稳 */
   cursor: pointer;
-  transition: background .15s;
+  box-shadow: 0 6px 18px rgba(0, 125, 144, .25);
+  transition: background .15s, box-shadow .15s;
 }
 
-button[type="submit"]:hover:not(:disabled) { background: var(--red-dark); }
-button[type="submit"]:disabled { background: #b9bec6; cursor: default; }
+button[type="submit"]:hover:not(:disabled) {
+  background: var(--jnu-deep);
+  box-shadow: 0 8px 22px rgba(0, 125, 144, .3);
+}
 
-/* 状态文字不再显示在按钮下方；保留在 DOM 里供读屏，内容会同步到右侧提示条 */
-.status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
+button[type="submit"]:disabled {
+  background: #b9bec6;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* ------------------------------------------------ 生成 PDF 的全局弹窗 */
+
+/*
+ * 生成进度与结果都走这里，右侧那条填写提示只反映表单状态。
+ * z-index 比学院选择面板（50）更靠前。
+ */
+.export-mask,
+.preview-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(16, 30, 34, .5);
+}
+
+.export-mask[hidden],
+.preview-mask[hidden] { display: none; }
+
+.export-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+  padding: 26px 24px 22px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(20, 40, 44, .28);
+  text-align: center;
+}
+
+.export-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 生成中：一个转圈的环。它是「正在发生」的指示，不是装饰，所以保留动画 */
+.export-icon.is-busy {
+  border: 3px solid var(--jnu-wash);
+  border-top-color: var(--jnu);
+  animation: export-spin .8s linear infinite;
+}
+
+@keyframes export-spin { to { transform: rotate(360deg); } }
+
+.export-icon.is-done { background: var(--jnu-wash); color: var(--jnu); }
+.export-icon.is-error { background: var(--danger-wash); color: var(--danger); }
+
+.export-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* ------------------------------------------------- 弹窗里的按钮 */
+
+.btn {
+  min-width: 108px;
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary { background: var(--jnu); border-color: var(--jnu); color: #fff; }
+.btn-primary:hover { background: var(--jnu-deep); border-color: var(--jnu-deep); }
+
+.btn-ghost { background: #fff; border-color: #d3d9de; color: var(--ink); }
+.btn-ghost:hover { border-color: #a9b0ba; }
+
+.btn[hidden] { display: none; }
+
+/* ------------------------------------------------ 生成前的预览弹窗 */
+
+.preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 880px;
+  height: min(88vh, 940px);
+  background: #fff;
+  border-radius: 16px;
   overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  box-shadow: 0 18px 48px rgba(20, 40, 44, .28);
 }
 
-.status.error { color: #c0392b; }
-.status.done { color: #1c7c54; }
+.preview-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 20px 12px;
+}
+
+.preview-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.preview-tip {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* iframe 里是浏览器自带的 PDF 阅读器，滚动、缩放都归它管 */
+.preview-frame {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #eceef1;
+}
+
+.preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+}
+
+/* 个别浏览器渲染不了 iframe 里的 PDF，给一条直接下载的退路 */
+.preview-open {
+  margin-right: auto;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.preview-open:hover { color: var(--jnu); }
+
+@media (max-width: 560px) {
+  .export-mask,
+  .preview-mask { padding: 0; }
+
+  .preview-dialog,
+  .export-dialog { border-radius: 0; }
+
+  .preview-dialog { height: 100%; max-height: none; }
+
+  .preview-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    padding-bottom: 20px;
+  }
+
+  .preview-open { width: 100%; margin: 0 0 4px; }
+
+  .preview-actions .btn { flex: 1; }
+}
 
 .notes {
-  margin-top: 8px;
+  margin: 8px 0 0;   /* 后面的 .site-footer 负责卡片底部留白 */
   padding: 18px 22px;
-  border: 1px dashed #dfe3e8;
+  border: none;
   border-radius: var(--radius);
-  background: #fafbfc;
+  background: var(--jnu-wash);
   color: var(--muted);
   font-size: 13.5px;
 }
 
 /*
- * 全局底栏：在卡片之外、整宽白色。
- * 平时藏在屏幕下方，把卡片内容滑到最底时从底部升上来。
+ * 免责声明：卡片内容里的最后一块，不是浮层。
+ * 滚到最底时它本来就在视野里 —— 没有「什么时候出现/收起」这回事，
+ * 也就不可能被滚动别的地方提前弄出来。
  */
 .site-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  padding: 12px 16px 14px;
-  background: #fff;
-  border-top: 1px solid var(--line);
+  margin: 26px 0 24px;   /* 下外边距就是卡片底部留白，见 .page 的说明 */
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
   text-align: center;
-  transform: translateY(110%);
-  transition: transform .3s ease;
 }
-
-.site-footer.show { transform: none; }
 
 .disclaimer {
   margin: 0;
@@ -618,15 +888,39 @@ button[type="submit"]:disabled { background: #b9bec6; cursor: default; }
 }
 
 .icp a { color: var(--muted); text-decoration: none; }
-.icp a:hover { color: var(--red); text-decoration: underline; }
+.icp a:hover { color: var(--jnu); text-decoration: underline; }
 
-.notes h2 { margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+.notes h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--jnu-deep);
+}
+
 .notes ul { margin: 0; padding-left: 20px; }
 .notes li { margin-bottom: 4px; }
 
+/* 键盘操作时才显示焦点框，鼠标点击不显示 */
+button:focus-visible,
+a:focus-visible,
+[role="option"]:focus-visible {
+  outline: 2px solid var(--jnu);
+  outline-offset: 2px;
+}
+
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
 @media (max-width: 520px) {
   .field-row { grid-template-columns: 1fr; gap: 0; }
-  .page { padding: 8px 16px 20px; border-radius: 16px; }
+  .page { padding: 8px 16px 0; border-radius: 16px; }
   .site-header { padding: 18px 0 14px; }
-  .site-header h1 { font-size: 20px; }
+  .site-header h1 { font-size: 21px; }
+  .emblem { width: 120px; height: 120px; margin: 6px auto 10px; }
 }

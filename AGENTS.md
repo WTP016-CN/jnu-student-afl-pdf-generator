@@ -47,7 +47,7 @@ python -m http.server 8080        # 或 npm run serve
   → collectErrors()          校验规则集中在这一处（提交报错和右侧 ✓/✕ 提示共用它）
   → readForm()               汇总成 data 对象
   → decodeBase64(TEMPLATE_PDF_BASE64)   模板（内嵌在 js/template-data.js）
-  → loadAssets()             fetch 两份裁剪字体，只在首次加载，之后走缓存
+  → loadAssets()             下载 PDF 用的宋体与 Tinos（点「生成」时才下，之后走缓存）
   → buildLeavePdf({...})     js/fill-pdf.js：按坐标往模板上画字、打勾
   → Blob + <a download>      直接交给浏览器下载
 ```
@@ -61,14 +61,15 @@ python -m http.server 8080        # 或 npm run serve
 | 文件 | 职责 |
 | --- | --- |
 | `index.html` | 页面骨架、importmap、**所有资源版本号** |
-| `style.css` | 全部样式（含卡片展开/收回、底栏升起等状态类） |
-| `js/app.js` | 表单交互、校验、学院选择面板、展开动画、生成与下载 |
+| `style.css` | 全部样式（含卡片展开、提示条、生成弹窗等状态类） |
+| `js/app.js` | 表单交互、校验、学院选择面板、展开、生成与下载 |
 | `js/fill-pdf.js` | 把数据画到模板 PDF 上（中英混排、自动缩字号、打勾、学号方格） |
 | `js/pdf-slots.js` | 模板中各填写位置的坐标常量（**实测值**，见下） |
 | `js/colleges.js` | 43 个学院名单 + 「其他（手动填写）」 |
 | `js/template-data.js` | 模板 PDF 的 base64，**由脚本生成，勿手改** |
+| `js/font-coverage.js` | 裁剪后字体覆盖的码位表，**由脚本生成，勿手改**（生僻字提示用） |
 | `assets/template.pdf` | 学校发布的请假申请表原件（2 页，A4） |
-| `assets/fonts/` | 裁剪后的开源字体（Noto Serif SC / Tinos）及许可 |
+| `assets/fonts/` | 裁剪后的开源字体：**黑体**（网页显示）、**宋体 + Tinos**（生成 PDF）及许可 |
 | `assets/background.jpg` | 页面背景（校园牌坊，4000×2219 JPEG，812 KB） |
 | `assets/jnu-emblem.svg` | 页头校徽 |
 | `vendor/` | pdf-lib / fontkit / pako 的 ESM 构建产物，见 [vendor/PATCHES.md](vendor/PATCHES.md) |
@@ -103,8 +104,11 @@ python -m http.server 8080        # 或 npm run serve
    取横线/方括号字符的 origin，而不是照截图量像素。
 
 6. **只允许开源字体。** 学校模板原本用宋体与 Times New Roman，两者都是随 Windows 分发的
-   商业字体，不能进公开仓库。中文用 Noto Serif SC、西文用 Tinos（均为 SIL OFL 1.1），
-   度量与原字体兼容。**不要**为了「更好看」引入任何需要授权的字体。
+   商业字体，不能进公开仓库。现在网页显示用思源黑体（Noto Sans CJK SC），生成 PDF 用
+   思源宋体（Noto Serif SC）+ Tinos，都是 SIL OFL 1.1，度量与原字体兼容。
+   **不要**为了「更好看」引入任何需要授权的字体。
+   **三份中文字体必须用同一套字符集裁剪**（`prepare-fonts.py` 里的 `CJK_CPS`），
+   否则生僻字检查会说谎。
 
 7. **许可证是 GPL-3.0，外加字体/三方库的各自许可。** 新增依赖前先确认许可证兼容；
    新增第三方代码要同时更新 README 的组件表。
@@ -154,9 +158,34 @@ grep -rn "v=[0-9]\{8\}" index.html style.css
 ### 改表单字段或校验规则
 
 - HTML 在 `index.html` 的 `<form>` 里，交互在 `js/app.js`
-- **校验规则集中在 `collectErrors()` 一处**，提交时报错文字和右侧 ✓/✕ 提示条都读它，
-  不要另写一套；新增字段记得同时更新 `readForm()` 的返回对象和 `js/fill-pdf.js` 的绘制
+- **校验规则集中在 `collectErrors()` 一处**，每条都带 `item`（属于哪一项，用来算进度）。
+  提交报错、右侧提示条都读它，不要另写一套
+- 全表共 9 项（`TOTAL_ITEMS`）：学号、姓名、学生类别、学院、专业、手机、电邮、请假时间、
+  请假原因。**只有后两项允许留空**，PDF 里那两行整行留白（纸质表格上本来也能手写）
+- 判断分两层，别混：
+  - `collectErrors()` 只收**填错了**的情况，每条都拦住生成
+  - `optionalGaps()` 统计那两个可留空项**整项没填**，不算错误，只影响进度条与提示条状态
+  - 所以「请假时间整项空着」放行，而「只填一半 / 开始晚于结束」算错误、拦住生成 ——
+    否则用户以为自己填了，PDF 里却整行空白
+- 提示条状态由 `formState().level` 决定，三档：`ok` / `warn`（只差可留空的两项，仍可生成）/
+  `bad`（有校验错误，拦住生成）。符号与配色在 `style.css` 的 `.validity.ok/.warn/.bad`
+- 可留空的单选组标了 `data-clearable`（目前只有请假原因），由 `enableDeselect()` 实现
+  「再点一次已选中的项 = 取消选择」。**只标在能留空的组上**：必填组清空没有意义，
+  而且 `emailMode()` 这类代码假定一定有一项被选中，清空会直接抛错
+- 改这块务必跑 `verify.mjs` 的 `blank` 用例，确认留空的两行是干净留白
 - 右侧提示条默认只给「碰过」的字段标红（`touched` 集合），避免一打开满屏红
+- **界面说明只留在「看不出来、不写会填错」的地方**（如「再点一下可取消选择」这种
+  隐藏行为）。别复述界面上已经有的信息：域名就显示在输入框旁边，学院按钮自带箭头、
+  面板里有搜索框 —— 这些都不用再写一行提示。加提示前先问：用户不写会做错吗
+- **生成过程的反馈走全局弹窗**（`.export-mask` + `showExport()`），**不动右侧提示条** ——
+  提示条只反映表单填写状态。别把生成进度塞回提示条：两种信息混在一条提示里，
+  用户分不清「表单填错了」还是「正在生成」。校验没过时**不弹窗**，就停在表单上，
+  该看的是字段高亮和提示条
+- **生成完先预览，用户确认后才下载**（`showPreview()` / `confirmPreview()`）。预览用的是
+  浏览器自带的 PDF 阅读器：blob URL 塞进 iframe，显示的就是真实成品。**不要**为了
+  「更好看」去引 pdf.js —— 那要多 1 MB 以上，而首屏已经 4.6 MB。个别浏览器不渲染
+  iframe 里的 PDF，所以留了 `.preview-open` 直接下载兜底。关预览时记得
+  `releasePreview()` 释放 blob，别漏
 
 ### 改填写位置
 
@@ -176,20 +205,45 @@ python tools/check-output.py build/*.pdf
 ### 改字体或字符范围
 
 ```bash
-python tools/prepare-fonts.py     # 下载源字体并裁剪到 assets/fonts/（首次约 25 MB 下载）
+python tools/prepare-fonts.py     # 下载源字体、裁剪成 assets/fonts/，并生成 js/font-coverage.js
 ```
 
-脚本会保留 GB2312 全集的汉字加常用补充符号（见脚本里的 `EXTRA`）。
-`js/app.js` 的 `unsupportedChars()` 用字体实际字符集给出「这些字不在字体范围内」的提示，
-所以**重做字体后这个提示会自动跟着变**，不用手改名单。注意 `prepare-fonts.py` 默认
-`assets/template.pdf` 不会被它改动，但会重写 `assets/fonts/*.ttf`，是二进制文件，提交前看一眼体积。
+脚本裁出 GB2312 全集加常用补充符号（见脚本里的 `EXTRA`），产出四份字体：
+
+| 产物 | 用途 | 字重 |
+| --- | --- | --- |
+| `noto-sans-sc-subset.otf` | 网页显示（`style.css` 里的 `@font-face`） | 400 |
+| `noto-sans-sc-bold-subset.otf` | 网页显示 | 700 |
+| `noto-serif-sc-subset.ttf` | 生成 PDF | 400 |
+| `tinos-subset.ttf` | 生成 PDF 里的西文 | 400 |
+
+黑体的源字体走 **CERNET 镜像**（`NOTO_CJK_MIRRORS`）取 Ubuntu 的 `fonts-noto-cjk`，
+比从 GitHub 下快两个数量级；宋体和 Tinos 仍从 google/fonts 取。
+
+脚本还会把裁好字体的真实码位导出到 `js/font-coverage.js`。`app.js` 的 `unsupportedChars()`
+读这份表来提示「这些字不在字体范围内」——**它是从字体导出的，所以重做字体后提示会自动跟着变，
+不用手改名单**；反过来说，改完字体一定要重跑这个脚本，否则表和字体就对不上了。
+
+提交前注意：`assets/fonts/*` 是二进制，看一眼体积；`js/font-coverage.js` 是生成物，别手改。
 
 ### 改样式
 
-`style.css` 里的状态类都跟 `js/app.js` 成对出现（`.page.expanded`、`.site-footer.show`、
-`.page.no-scroll`、`.invalid`、`.validity.ok/.bad`）。改动画/布局时两边一起看，
-特别注意底栏高度是通过 CSS 变量 `--footer-h` 由 JS 写入的。
-**改完记得递增版本号。**
+`style.css` 里的状态类大多跟 `js/app.js` 成对出现（`.page.expanded`、`.page.no-scroll`、
+`.invalid`、`.validity.ok/.bad`）。改动画/布局时两边一起看。**改完记得递增版本号。**
+
+两处不明显的耦合，动之前先读一眼：
+
+- **字体分了两摊**：网页显示用的思源黑体写在 `style.css` 的 `@font-face` 里；
+  生成 PDF 用的宋体与 Tinos 不在 CSS 里，由 `app.js` 等用户点「生成」时才下载。
+  所以在 CSS 里找不到宋体、在 `app.js` 里也找不到页面字体，这是有意的，不是漏了。
+- **吸底按钮的白色底衬依赖 `.page` 没有底部内边距。** 卡片底部留白由最后一块
+  （`.site-footer`）的下外边距承担；如果给 `.page` 加回 `padding-bottom`，
+  内容就会从按钮下方那一小条里露出来。
+- **展开是单向的，别再给它加「收回」。** 展开后 `.page-hint` 由 CSS 隐藏、`scrollTop` 归零，
+  顶部从校徽开始；滑动、滚轮、方向上键都不收回。这是有意去掉的，不是漏了。
+- **免责声明是卡片内容的最后一块，不是浮层。** 它靠普通文档流「滚到最底才可见」，
+  不要改回 `position: fixed` 之类——那样就得再引入一套出现/收起的判定，
+  还免不了防抖阈值和闪烁。
 
 ## 验证（Definition of Done）
 
@@ -200,10 +254,12 @@ node tools/verify.mjs                          # 生成 build/sample.pdf、stres
 python tools/check-output.py build/*.pdf       # 检查内嵌字体有没有缺字
 ```
 
-- `verify.mjs` 的三个用例是有意挑的：`sample` 普通情况、`stress` 大量不同汉字（逼出缺字 bug）、
-  `long` 超长学院/专业（触发自动缩小字号）与不足 10 位的学号。**改生成逻辑后三个都要看。**
+- `verify.mjs` 的四个用例是有意挑的：`sample` 普通情况、`stress` 大量不同汉字（逼出缺字 bug）、
+  `long` 超长学院/专业（触发自动缩小字号）与不足 10 位的学号、`blank` 请假时间与原因全空。
+  **改生成逻辑后四个都要看**，`blank` 那份尤其要确认那两行是干净留白，没有空串、`NaN`
+  或错位的字。
 - `check-output.py` 是 fontkit 那个 loca bug 的回归检查（约定 4）。**改动 `vendor/` 或重做字体后必须跑。**
-- 涉及页面交互的改动（展开/收回、学院面板、提示条）没有自动检查，请在浏览器里实际点一遍，
+- 涉及页面交互的改动（展开、学院面板、提示条、生成弹窗）没有自动检查，请在浏览器里实际点一遍，
   手机宽度（≤ 520px）也看一眼——`@media (max-width: 520px)` 有单独的布局分支。
 
 提交前的最短清单：

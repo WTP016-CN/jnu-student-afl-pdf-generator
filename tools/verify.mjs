@@ -51,10 +51,22 @@ const long = {
   major: '国际政治（国际关系与国际商务双学位实验班）',
 };
 
+// 留空用例：请假时间和原因都不填（页面允许这样直接生成），
+// PDF 里那两处必须干净留白，不能出现空串、NaN 或错位的字
+const blank = {
+  ...data,
+  startDate: '',
+  endDate: '',
+  days: 0,
+  reasonType: '',
+  fillAttachment: true,
+};
+
 for (const [file, payload] of [
   ['build/sample.pdf', data],
   ['build/stress.pdf', stress],
   ['build/long.pdf', long],
+  ['build/blank.pdf', blank],
 ]) {
   const pdf = await buildLeavePdf({ ...assets, data: payload });
   await writeFile(new URL(file, root), pdf);
