@@ -23,3 +23,9 @@ Desktop.ini
 # （当前：微信图片_2026-10-03_184016_119.png 是 assets/background.jpg 的源照片，
 #   4000×2219 PNG 5.1 MB；README 用的预览图请放 docs/）
 微信图片_*.png
+
+# 给编码代理看的内部约定：只在本机用，不发布
+# 注意 gitignore 管不了已经被跟踪的文件 —— 要让它们从线上撤下来，
+# 得配合 git rm --cached（AGENTS.md 就这么处理过一次）
+AGENTS.md
+CLAUDE.md
