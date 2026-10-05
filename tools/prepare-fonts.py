@@ -14,10 +14,14 @@
               google/fonts/ofl/tinos/Tinos-Regular.ttf
 
 产物：
-    assets/fonts/noto-sans-sc-subset.otf        黑体 Regular，GB2312 全集 + 常用补充符号
-    assets/fonts/noto-sans-sc-bold-subset.otf   黑体 Bold，字符集同上
-    assets/fonts/noto-serif-sc-subset.ttf       宋体，字符集同上（PDF 用）
-    assets/fonts/tinos-subset.ttf               西文，拉丁字母/数字/常用标点
+    assets/fonts/noto-sans-sc-subset.otf        黑体 Regular·常用（GB2312 全集 + 常用符号）
+    assets/fonts/noto-sans-sc-rare-subset.otf   黑体 Regular·生僻（CJK 基本区 + 扩展 A 区里
+                                                常用包没覆盖的部分），靠 unicode-range 按需下载
+    assets/fonts/noto-sans-sc-bold-subset.otf   黑体 Bold·只裁界面用字（页面加粗的都是写死文案）
+    assets/fonts/faces.css                      上面三份的 @font-face 规则（含 unicode-range）
+    assets/fonts/noto-serif-sc-subset.ttf       宋体，CJK 基本区 + 扩展 A 区全部码位（PDF 用）
+    assets/fonts/tinos-subset.ttf               西文，拉丁字母/数字/常用标点（PDF 用）
+    js/font-coverage.js                         宋体覆盖的码位表（生僻字提示用）
 """
 import io
 import lzma
@@ -50,6 +54,10 @@ NOTO_CJK_MIRRORS = [
 ]
 SANS_FACE = 2  # .ttc 中 Noto Sans CJK SC 的下标
 
+# 写进 assets/fonts/faces.css 的字体版本号。字体文件变了就得递增它，
+# 否则访客拿到的是浏览器缓存里的旧字体（见 README「发布前必做：递增版本号」）。
+FONT_VERSION = "20261006a"
+
 # 丢弃嵌入点阵(EBDT/EBLC)、竖排度量、数字签名等用不到的表，明显减小体积
 DROP_TABLES = "EBDT,EBLC,EBSC,MERG,meta,vmtx,vhea,DSIG"
 
@@ -70,9 +78,54 @@ def gb2312_codepoints():
 EXTRA = "√✓×✗□■○●△▲☆★※°′″℃№→←↑↓↔§¶·—–…‰"
 ASCII = set(range(0x20, 0x7F))
 
-CJK_CPS = sorted(gb2312_codepoints() | ASCII | {ord(c) for c in EXTRA})
+# CJK 统一汉字基本区 + 扩展 A 区：学生姓名里难免有生僻字（如「燚」「㸚」），
+# 生成的 PDF 必须能画出它们，所以宋体裁到这两个区的全部码位。
+CJK_BASIC = set(range(0x4E00, 0xA000))
+CJK_EXT_A = set(range(0x3400, 0x4DC0))
+
+# 必须写成 GB2312 ∪ 两个 CJK 区：全角标点（（）、“”、《》……）不在 CJK 汉字区里，
+# 只取汉字区会把它们漏掉，生成的 PDF 里那些标点会变成空白。
+COMMON_CPS = sorted(gb2312_codepoints() | ASCII | {ord(c) for c in EXTRA})
+FULL_CPS = sorted(set(COMMON_CPS) | CJK_BASIC | CJK_EXT_A)
+RARE_CPS = sorted(set(FULL_CPS) - set(COMMON_CPS))
 LATIN_CPS = sorted(ASCII | set(range(0xA0, 0x100))
                    | {ord(c) for c in "‘’“”–—…‰°′″×÷√§¶†‡€£¥©®™"})
+
+
+def ui_codepoints():
+    """页面里可能出现在加粗文案上的字符。
+
+    页面所有加粗的地方都是写死的界面文案（标题、区块名、字段标签、选项、按钮、
+    选中的学院名……），用户输入的内容一律是常规字重。所以加粗字体只需要这一小撮字，
+    不必跟着裁两万多个汉字 —— 这一下就省掉 1.5 MB 首屏。
+    **给用户能输入的内容加粗之前，先确认那些字在这个集合里。**
+    """
+    chars = set()
+    for rel in ("index.html", "js/app.js", "js/colleges.js"):
+        with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+            chars |= set(fh.read())
+    return sorted({ord(c) for c in chars if ord(c) >= 0x20})
+
+
+def to_ranges(codepoints):
+    """把码位表压成连续区间，用来写 unicode-range。"""
+    ranges, start, prev = [], None, None
+    for cp in sorted(codepoints):
+        if start is None:
+            start = prev = cp
+        elif cp == prev + 1:
+            prev = cp
+        else:
+            ranges.append((start, prev))
+            start = prev = cp
+    if start is not None:
+        ranges.append((start, prev))
+    return ranges
+
+
+def to_unicode_range(codepoints):
+    return ",".join("U+%04X-%04X" % r if r[0] != r[1] else "U+%04X" % r[0]
+                    for r in to_ranges(codepoints))
 
 
 def retrieve(name, url):
@@ -214,18 +267,7 @@ def write_coverage(font_path, dst):
     页面就不必为了做这个检查先把字体下下来（宋体只用于生成 PDF，是等点「生成」才取的）。
     """
     cps = sorted(cp for cp in TTFont(font_path, lazy=True).getBestCmap() if cp >= 0x20)
-
-    ranges, start, prev = [], None, None
-    for cp in cps:
-        if start is None:
-            start = prev = cp
-        elif cp == prev + 1:
-            prev = cp
-        else:
-            ranges.append((start, prev))
-            start = prev = cp
-    if start is not None:
-        ranges.append((start, prev))
+    ranges = to_ranges(cps)
 
     body = ",".join("%04X-%04X" % r if r[0] != r[1] else "%04X" % r[0] for r in ranges)
     banner = ("/* 由 tools/prepare-fonts.py 从裁剪好的字体里导出，请勿手工修改。\n"
@@ -236,6 +278,40 @@ def write_coverage(font_path, dst):
           % ("字体覆盖表", os.path.getsize(dst) / 1024, len(cps), len(ranges)))
 
 
+def write_faces_css(dst):
+    """生成 style.css 之外的那份 @font-face 规则。
+
+    黑体靠 unicode-range 拆成「常用字包」与「生僻字包」：浏览器只在页面真的显示到
+    某个区间里的字时才去下那个文件。多数人只下常用包（约 1.6 MB）；姓名里有生僻字
+    （如「燚」）的人才会额外下生僻包。加粗那份只裁界面用字，见 ui_codepoints()。
+
+    区间表又长又碎（GB2312 在 Unicode 里本来就是散的），所以单独放一个生成文件，
+    不塞进手写的 style.css。
+    """
+    banner = ("/* 由 tools/prepare-fonts.py 生成，请勿手工修改。\n"
+              "   黑体分「常用字包 / 生僻字包」，靠 unicode-range 让浏览器按需下载；\n"
+              "   重新裁剪字体后要把下面的 FONT_VERSION 一起递增（见脚本顶部）。 */")
+    faces = [
+        ("noto-sans-sc-subset.otf", 400, COMMON_CPS),
+        ("noto-sans-sc-rare-subset.otf", 400, RARE_CPS),
+        ("noto-sans-sc-bold-subset.otf", 700, ui_codepoints()),
+    ]
+    blocks = [banner]
+    for name, weight, codepoints in faces:
+        blocks.append(
+            '@font-face {\n'
+            '  font-family: "JNU Sans";\n'
+            '  src: url("%s?v=%s") format("opentype");\n'
+            '  font-weight: %d;\n'
+            '  font-style: normal;\n'
+            '  font-display: swap;\n'
+            '  unicode-range: %s;\n'
+            '}' % (name, FONT_VERSION, weight, to_unicode_range(codepoints)))
+    with open(dst, "w", encoding="utf-8") as fh:
+        fh.write("\n\n".join(blocks) + "\n")
+    print("  %-22s %8.1f KB" % ("@font-face 规则", os.path.getsize(dst) / 1024))
+
+
 def main():
     os.makedirs(BUILD, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
@@ -243,20 +319,24 @@ def main():
     for name, url in DOWNLOADS.items():
         retrieve(name, url)
 
-    # 页面显示用的黑体：Regular + Bold 两个字重，网页上就能用真实加粗
+    # 网页显示用的黑体，拆成三份（见 write_faces_css 的说明）
     retrieve_sans_faces()
     subset(os.path.join(SRC, "NotoSansCJK-Regular.ttc"),
-           os.path.join(OUT, "noto-sans-sc-subset.otf"), CJK_CPS, "Noto Sans SC", face=SANS_FACE)
+           os.path.join(OUT, "noto-sans-sc-subset.otf"), COMMON_CPS, "黑体 Regular·常用", face=SANS_FACE)
+    subset(os.path.join(SRC, "NotoSansCJK-Regular.ttc"),
+           os.path.join(OUT, "noto-sans-sc-rare-subset.otf"), RARE_CPS, "黑体 Regular·生僻", face=SANS_FACE)
     subset(os.path.join(SRC, "NotoSansCJK-Bold.ttc"),
-           os.path.join(OUT, "noto-sans-sc-bold-subset.otf"), CJK_CPS, "Noto Sans SC Bold", face=SANS_FACE)
+           os.path.join(OUT, "noto-sans-sc-bold-subset.otf"), ui_codepoints(), "黑体 Bold·界面用字",
+           face=SANS_FACE)
 
-    # 下面两份只用于生成 PDF
+    # 下面两份只用于生成 PDF，宋体裁到 CJK 基本区 + 扩展 A 区全部码位
     cjk_src = static_instance(os.path.join(SRC, "NotoSerifSC-var.ttf"))
     serif = os.path.join(OUT, "noto-serif-sc-subset.ttf")
-    subset(cjk_src, serif, CJK_CPS, "Noto Serif SC")
+    subset(cjk_src, serif, FULL_CPS, "宋体（PDF）")
     subset(os.path.join(SRC, "Tinos-Regular.ttf"),
-           os.path.join(OUT, "tinos-subset.ttf"), LATIN_CPS, "Tinos")
+           os.path.join(OUT, "tinos-subset.ttf"), LATIN_CPS, "Tinos（PDF）")
 
+    write_faces_css(os.path.join(OUT, "faces.css"))
     write_coverage(serif, os.path.join(ROOT, "js", "font-coverage.js"))
 
 

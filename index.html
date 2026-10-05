@@ -9,7 +9,10 @@
   版本号统一写在这里：GitHub Pages 对 css/js/图片缓存 4 小时、HTML 只缓存 10 分钟，
   不加版本号会出现「新 HTML + 旧资源」的错位。改样式或脚本后把下面的 V 递增即可。
 -->
-<link rel="stylesheet" href="style.css?v=20261006b">
+<!-- @font-face 规则由 tools/prepare-fonts.py 生成：黑体拆成常用 / 生僻两包，
+     靠 unicode-range 让浏览器按需下载（详见 assets/fonts/faces.css 顶部说明） -->
+<link rel="stylesheet" href="assets/fonts/faces.css?v=20261006c">
+<link rel="stylesheet" href="style.css?v=20261006c">
 <script type="importmap">
 {
   "scopes": {
@@ -18,7 +21,7 @@
       "./js/pdf-slots.js": "./js/pdf-slots.js?v=20261003a",
       "./js/colleges.js": "./js/colleges.js?v=20261003a",
       "./js/template-data.js": "./js/template-data.js?v=20261003a",
-      "./js/font-coverage.js": "./js/font-coverage.js?v=20261005a",
+      "./js/font-coverage.js": "./js/font-coverage.js?v=20261006c",
       "./vendor/pdf-lib.esm.min.js": "./vendor/pdf-lib.esm.min.js?v=20261003a",
       "./vendor/fontkit.es.min.js": "./vendor/fontkit.es.min.js?v=20261003a"
     },
@@ -248,6 +251,6 @@
   </div>
 </div>
 
-<script type="module" src="js/app.js?v=20261006b"></script>
+<script type="module" src="js/app.js?v=20261006c"></script>
 </body>
 </html>

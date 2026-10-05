@@ -5,11 +5,11 @@
 
 在线版：<https://pages.wtp016.eu.org/>
 
-![填写界面](docs/preview-form.png)
+![填写界面](docs/preview-form.webp)
 
 生成结果（申请表第 1 页的申请人填写部分）：
 
-![生成结果](docs/preview-pdf.png)
+![生成结果](docs/preview-pdf.webp)
 
 ## 功能要点
 
@@ -32,8 +32,9 @@ python -m http.server 8080     # 或 npm run serve
 
 部署：GitHub Pages → Settings → Pages → Source 选 `main` 分支根目录。
 
-首次加载约 4.6 MB（思源黑体 3.1 MB + 背景图 0.8 MB）。生成 PDF 用的宋体与 Tinos 另约 1.8 MB，
-点「生成」时才下载，不在首屏里。
+首次加载约 3.0 MB（思源黑体常用字包 1.5 MB + 背景图 0.8 MB + JS 等）。另有几份按需下载、
+不在首屏里：姓名里有生僻字时才会下生僻字包（约 5 MB）；点「生成」时下 PDF 用的宋体
+（约 7.7 MB，覆盖 CJK 基本区 + 扩展 A 区全部码位，所以生僻字也能画进 PDF）。
 
 ## 项目结构
 
@@ -79,8 +80,11 @@ grep -rn "v=[0-9]\{8\}" index.html style.css     # 看现在有哪些字面量
 ```
 
 容易漏的是连带关系：`style.css` 的内容改了，`index.html` 里的 `style.css?v=` 必须一起递增，
-否则访客拿到的是缓存里的整份旧样式；换背景图同理。字体路径由 `app.js` 从自身 URL
-取版本号自动拼接，跟着 `js/app.js` 的版本号走，不用单独维护。
+否则访客拿到的是缓存里的整份旧样式；换背景图同理。
+
+字体分两条路：生成 PDF 用的宋体与 Tinos 跟着 `js/app.js` 的版本号走（`app.js` 从自身 URL
+取版本号拼字体地址），不用单独维护；网页显示用的黑体写在生成的 `assets/fonts/faces.css` 里，
+版本号是 `tools/prepare-fonts.py` 顶部的 `FONT_VERSION` —— 重新裁剪字体后要递增它。
 
 ## 几处「为什么这么写」
 
@@ -101,6 +105,8 @@ grep -rn "v=[0-9]\{8\}" index.html style.css     # 看现在有哪些字面量
 - 学号、手机号只校验格式，不校验真实性。
 - 页面底部预留了大陆备案号的位置（`index.html` 的 `.icp`，默认 `hidden`）。GitHub Pages
   属境外托管无法备案，真要备案得先把站点迁到境内主机。
+- PDF 字体覆盖 CJK 基本区与扩展 A 区，再往外的扩展 B 区（U+20000 起，如「𠮷」）不在范围内，
+  遇到会被拦下并提示替换。
 
 ## 许可证
 

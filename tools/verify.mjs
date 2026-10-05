@@ -29,12 +29,14 @@ const assets = {
   cjkFontBytes: await read('assets/fonts/noto-serif-sc-subset.ttf'),
 };
 
-// 缺字回归用例：尽量多地用到不同汉字，配合 tools/check-output.py 检查字形有没有丢
+// 缺字回归用例：尽量多地用到不同汉字，并塞进 GB2312 之外的生僻字
+// （燚 U+71DA 在基本区但不在 GB2312；㸚 U+3E1A 在扩展 A 区），
+// 配合 tools/check-output.py 检查字形有没有丢
 const stress = {
   ...data,
-  name: '欧阳曦',
+  name: '欧阳燚',
   college: '暨南大学国际商学院',
-  major: '金融学（全英文授课）',
+  major: '金融学（全英文授课）㸚',
   reasonType: 'health',
   startDate: '2026-11-02',
   endDate: '2026-11-30',

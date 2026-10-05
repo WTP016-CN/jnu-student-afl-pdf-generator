@@ -1,26 +1,11 @@
 /*
- * 页面显示字体：思源黑体（Noto Sans CJK SC），由 tools/prepare-fonts.py 裁到
- * GB2312 全集（7547 字）。Regular 与 Bold 都是真实字重，加粗不靠浏览器合成。
+ * 页面显示字体是思源黑体（Noto Sans CJK SC），但它的 @font-face 规则不在这里 ——
+ * 黑体拆成了「常用字包 / 生僻字包」，每包都带着一大串 unicode-range，
+ * 那段机器生成的规则放在 assets/fonts/faces.css（由 tools/prepare-fonts.py 生成），
+ * 免得把这份手写的样式表撑成几万行的区间表。
  *
- * 用 @font-face 而不是等 JS 去注册，是为了让浏览器在解析 CSS 时就开始下载，
- * 标题和正文能早一点换过来、少闪一下系统字体。
- * 生成 PDF 用的宋体不在这里 —— 那份字体只在点「生成」时才由 app.js 取。
+ * 生成 PDF 用的宋体也不在这里 —— 那份字体只在点「生成」时才由 app.js 取。
  */
-@font-face {
-  font-family: "JNU Sans";
-  src: url("assets/fonts/noto-sans-sc-subset.otf?v=20261005a") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "JNU Sans";
-  src: url("assets/fonts/noto-sans-sc-bold-subset.otf?v=20261005a") format("opentype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
 
 :root {
   /*
